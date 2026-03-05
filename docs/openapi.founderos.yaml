@@ -88,10 +88,11 @@ components:
       properties:
         tool_name:
           type: string
+          enum: [health, memory.write, memory.query]
         input:
           type: object
           additionalProperties: true
-      required: [tool_name, input]
+      required: [tool_name]
     ToolExecuteResponse:
       type: object
       properties:

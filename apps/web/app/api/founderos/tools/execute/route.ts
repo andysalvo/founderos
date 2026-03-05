@@ -35,10 +35,19 @@ export async function POST(request: Request) {
     }
     toolName = raw.tool_name.trim();
 
-    if (!isRecord(raw.input)) {
+    if (raw.input === undefined) {
+      toolInput = {};
+    } else if (!isRecord(raw.input)) {
       throw new FounderosInputError("input must be a JSON object");
+    } else {
+      toolInput = raw.input;
     }
-    toolInput = raw.input;
+
+    if (toolName === "health") {
+      toolOutput = { ok: true, ts: new Date().toISOString() };
+      toolStatus = "ok";
+      return NextResponse.json(toolOutput);
+    }
 
     if (toolName === "memory.write") {
       const memoryInput = parseMemoryWriteInput(toolInput);
