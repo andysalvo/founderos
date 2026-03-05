@@ -4,8 +4,7 @@ info:
   version: 0.1.0
   description: Minimal GPT -> Vercel Actions -> Supabase memory API.
 servers:
-  - url: https://example.vercel.app
-    description: Replace with your Vercel production base URL.
+  - url: https://founderos-alpha.vercel.app
 components:
   securitySchemes:
     FounderosApiKey:
