@@ -1,0 +1,184 @@
+openapi: 3.1.0
+info:
+  title: FounderOS Actions API
+  version: 0.1.0
+  description: Minimal GPT -> Vercel Actions -> Supabase memory API.
+servers:
+  - url: https://example.vercel.app
+    description: Replace with your Vercel production base URL.
+components:
+  securitySchemes:
+    FounderosApiKey:
+      type: apiKey
+      in: header
+      name: x-founderos-key
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        ts:
+          type: string
+          format: date-time
+      required: [ok, ts]
+    MemoryWriteRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+      required: [kind, body]
+    MemoryWriteResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+      required: [ok, id, created_at]
+    MemoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        title:
+          type: string
+          nullable: true
+        body:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required: [id, kind, body, tags, created_at]
+    MemoryQueryResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryItem'
+      required: [ok, items]
+    ToolExecuteRequest:
+      type: object
+      properties:
+        tool_name:
+          type: string
+        input:
+          type: object
+          additionalProperties: true
+      required: [tool_name, input]
+    ToolExecuteResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+      required: [ok]
+paths:
+  /api/founderos/health:
+    get:
+      operationId: health
+      summary: Health check
+      responses:
+        '200':
+          description: API is reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/founderos/memory/write:
+    post:
+      operationId: memoryWrite
+      summary: Write one memory item
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryWriteRequest'
+      responses:
+        '200':
+          description: Memory written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryWriteResponse'
+  /api/founderos/memory/query:
+    get:
+      operationId: memoryQuery
+      summary: Query memory items
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: query
+          name: kind
+          schema:
+            type: string
+          required: false
+        - in: query
+          name: q
+          schema:
+            type: string
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          required: false
+      responses:
+        '200':
+          description: Memory query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryQueryResponse'
+  /api/founderos/tools/execute:
+    post:
+      operationId: toolsExecute
+      summary: Execute enabled FounderOS tool
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolExecuteRequest'
+      responses:
+        '200':
+          description: Tool execution response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolExecuteResponse'

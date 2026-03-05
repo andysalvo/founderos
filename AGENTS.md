@@ -2,7 +2,8 @@
 
 Handoff format:
 TASK: <what to do>
-DONE: <how to verify>
+FILES: <relevant paths>
+ACTION: <implementation step>
 
 Rules:
 - Keep handoffs to 1–5 tasks.
