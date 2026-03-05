@@ -103,6 +103,7 @@ components:
 paths:
   /api/founderos/health:
     get:
+      security: []
       operationId: health
       summary: Health check
       responses:
