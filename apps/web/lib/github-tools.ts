@@ -120,6 +120,7 @@ async function githubApi<T>(
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/vnd.github+json");
   headers.set("X-GitHub-Api-Version", "2022-11-28");
+  headers.set("User-Agent", "founderos-tools/1.0");
 
   if (authMode === "app") {
     headers.set("Authorization", `Bearer ${createGitHubAppJwt()}`);

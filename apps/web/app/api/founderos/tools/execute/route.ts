@@ -635,7 +635,10 @@ export async function POST(request: Request) {
       return NextResponse.json(toolOutput, { status: 400 });
     }
 
-    toolOutput = { ok: false, error: "internal error" };
+    toolOutput = {
+      ok: false,
+      error: error instanceof Error ? error.message : "internal error",
+    };
     return NextResponse.json(toolOutput, { status: 500 });
   } finally {
     await appendToolLog({
