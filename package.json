@@ -1,0 +1,8 @@
+{
+  "name": "founderos-v1",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test tests/founderos-v1-contract.test.mjs"
+  }
+}

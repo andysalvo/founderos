@@ -1,43 +1,14 @@
-const { randomUUID, createHash, createSign } = require("crypto");
-
-function sendJson(res, statusCode, payload, extraHeaders) {
-  res.statusCode = statusCode;
-  res.setHeader("Content-Type", "application/json");
-  if (extraHeaders && typeof extraHeaders === "object") {
-    for (const [key, value] of Object.entries(extraHeaders)) {
-      res.setHeader(key, value);
-    }
-  }
-  return res.end(JSON.stringify(payload));
-}
-
-function isPlainObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseBody(body) {
-  if (typeof body === "string") {
-    try {
-      return { ok: true, value: JSON.parse(body) };
-    } catch (_err) {
-      return { ok: false };
-    }
-  }
-  if (Buffer.isBuffer(body)) {
-    try {
-      return { ok: true, value: JSON.parse(body.toString("utf8")) };
-    } catch (_err) {
-      return { ok: false };
-    }
-  }
-  if (body === undefined || body === null) {
-    return { ok: true, value: {} };
-  }
-  if (isPlainObject(body)) {
-    return { ok: true, value: body };
-  }
-  return { ok: false };
-}
+const { randomUUID, createSign } = require("crypto");
+const {
+  getAllowedRepos,
+  hashJson,
+  isPlainObject,
+  isProtectedPath,
+  parseJsonBody,
+  requireApiKey,
+  requireMethod,
+  sendJson,
+} = require("../../_lib/founderos-v1");
 
 function base64UrlEncode(input) {
   return Buffer.from(input)
@@ -151,35 +122,47 @@ async function getInstallationToken(appId, installationId, privateKeyPem) {
   return data.token;
 }
 
-function isProtectedPath(path) {
-  if (path.startsWith("api/founderos/commit/")) return true;
-  if (path === "api/founderos/commit") return true;
-  if (path.startsWith("api/founderos/witness/")) return true;
-  if (path === "api/founderos/witness") return true;
-  if (path.startsWith(".env")) return true;
-  if (path === "vercel.json") return true;
-  if (path.startsWith(".github/workflows/")) return true;
-  if (path === ".github/workflows") return true;
-  return false;
+async function insertWitnessEvent(row, supabaseUrl, serviceRoleKey) {
+  const response = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/rest/v1/witness_events`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      apikey: serviceRoleKey,
+      authorization: `Bearer ${serviceRoleKey}`,
+      prefer: "return=representation",
+    },
+    body: JSON.stringify(row),
+  });
+
+  if (!response.ok) {
+    const error = new Error(`Supabase REST ${response.status}`);
+    error.code = "supabase_insert_failed";
+    throw error;
+  }
+
+  try {
+    const inserted = await response.json();
+    if (Array.isArray(inserted) && inserted[0] && inserted[0].id) {
+      return inserted[0].id;
+    }
+  } catch (_err) {
+    // Keep generated id when the REST API returns no JSON body.
+  }
+
+  return row.id;
 }
 
 module.exports = async (req, res) => {
   try {
-    if (req.method !== "POST") {
-      return sendJson(
-        res,
-        405,
-        { ok: false, error: "method_not_allowed" },
-        { Allow: "POST" }
-      );
+    if (!requireMethod(req, res, "POST")) {
+      return undefined;
     }
 
-    const key = req.headers && req.headers["x-founderos-key"];
-    if (!key || key !== process.env.FOUNDEROS_WRITE_KEY) {
-      return sendJson(res, 401, { ok: false, error: "unauthorized" });
+    if (!requireApiKey(req, res)) {
+      return undefined;
     }
 
-    const parsed = parseBody(req.body);
+    const parsed = parseJsonBody(req.body);
     if (!parsed.ok || !isPlainObject(parsed.value)) {
       return sendJson(res, 400, { ok: false, error: "invalid_json" });
     }
@@ -188,50 +171,55 @@ module.exports = async (req, res) => {
     const writeSet = body.write_set;
     const authorization = body.authorization;
 
-    // Hard validation: reject missing or invalid top-level objects.
     if (!isPlainObject(writeSet)) {
       return sendJson(res, 400, { ok: false, error: "write_set_required" });
     }
+
     if (!isPlainObject(authorization)) {
       return sendJson(res, 400, { ok: false, error: "authorization_required" });
     }
 
-    // Hard validation: required write set fields.
     if (typeof writeSet.branch_name !== "string" || writeSet.branch_name.length === 0) {
       return sendJson(res, 400, { ok: false, error: "branch_name_required" });
     }
+
     if (typeof writeSet.base_branch !== "string" || writeSet.base_branch.length === 0) {
       return sendJson(res, 400, { ok: false, error: "base_branch_required" });
     }
+
     if (typeof writeSet.title !== "string" || writeSet.title.length === 0) {
       return sendJson(res, 400, { ok: false, error: "title_required" });
     }
+
     if (typeof writeSet.repo !== "string" || writeSet.repo.length === 0) {
       return sendJson(res, 400, { ok: false, error: "repo_required" });
     }
+
     if (!Array.isArray(writeSet.files) || writeSet.files.length === 0) {
       return sendJson(res, 400, { ok: false, error: "files_required" });
     }
 
-    // Hard validation: required authorization fields.
     if (
       typeof authorization.plan_artifact_id !== "string" ||
       authorization.plan_artifact_id.length === 0
     ) {
       return sendJson(res, 400, { ok: false, error: "plan_artifact_id_required" });
     }
+
     if (
       typeof authorization.plan_artifact_hash !== "string" ||
       authorization.plan_artifact_hash.length === 0
     ) {
       return sendJson(res, 400, { ok: false, error: "plan_artifact_hash_required" });
     }
+
     if (
       typeof authorization.write_set_hash !== "string" ||
       authorization.write_set_hash.length === 0
     ) {
       return sendJson(res, 400, { ok: false, error: "write_set_hash_required" });
     }
+
     if (
       typeof authorization.authorized_by !== "string" ||
       authorization.authorized_by.length === 0
@@ -239,20 +227,16 @@ module.exports = async (req, res) => {
       return sendJson(res, 400, { ok: false, error: "authorized_by_required" });
     }
 
-    // Hash bind check: execute only the exact authorized bytes.
-    const computedWriteSetHash = createHash("sha256")
-      .update(JSON.stringify(writeSet))
-      .digest("hex");
-    if (computedWriteSetHash !== authorization.write_set_hash) {
+    if (hashJson(writeSet) !== authorization.write_set_hash) {
       return sendJson(res, 400, { ok: false, error: "write_set_hash_mismatch" });
     }
 
-    // Structural hazard checks + strict file entry validation.
     const seenPaths = new Set();
     for (const file of writeSet.files) {
       if (!isPlainObject(file)) {
         return sendJson(res, 400, { ok: false, error: "invalid_file_entry" });
       }
+
       if (
         typeof file.path !== "string" ||
         file.path.length === 0 ||
@@ -262,18 +246,23 @@ module.exports = async (req, res) => {
       ) {
         return sendJson(res, 400, { ok: false, error: "invalid_file_entry" });
       }
+
       if (file.action !== "create" && file.action !== "update") {
         return sendJson(res, 400, { ok: false, error: "invalid_file_action" });
       }
+
       if (file.path.includes("..")) {
         return sendJson(res, 400, { ok: false, error: "path_traversal_rejected" });
       }
+
       if (file.path.startsWith("/")) {
         return sendJson(res, 400, { ok: false, error: "absolute_path_rejected" });
       }
+
       if (seenPaths.has(file.path)) {
         return sendJson(res, 400, { ok: false, error: "duplicate_paths_rejected" });
       }
+
       seenPaths.add(file.path);
 
       if (isProtectedPath(file.path)) {
@@ -285,11 +274,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Repo allowlist check.
-    const allowedRepos = (process.env.ALLOWED_REPOS || "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const allowedRepos = getAllowedRepos();
     if (!allowedRepos.includes(writeSet.repo)) {
       return sendJson(res, 403, { ok: false, error: "repo_not_allowed" });
     }
@@ -298,13 +283,62 @@ module.exports = async (req, res) => {
     if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
       return sendJson(res, 400, { ok: false, error: "repo_required" });
     }
-    const owner = repoParts[0];
-    const repo = repoParts[1];
 
     const appId = process.env.GITHUB_APP_ID;
     const installationId = process.env.GITHUB_INSTALLATION_ID;
-    const rawKey = process.env.GITHUB_APP_PRIVATE_KEY || '';
-    const privateKey = rawKey.replace(/\\n/g, '\n');
+    const privateKey = (process.env.GITHUB_APP_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!appId || !installationId || !privateKey.trim()) {
+      return sendJson(res, 500, { ok: false, error: "github_not_configured" });
+    }
+
+    if (!supabaseUrl || !supabaseKey) {
+      return sendJson(res, 500, { ok: false, error: "witness_not_configured" });
+    }
+
+    const owner = repoParts[0];
+    const repo = repoParts[1];
+
+    const witnessRow = {
+      id: randomUUID(),
+      ts: new Date().toISOString(),
+      type: "commit.execution_authorized",
+      commit_id: null,
+      artifact_id: authorization.plan_artifact_id,
+      actor: authorization.authorized_by,
+      payload: {
+        repo: writeSet.repo,
+        base_branch: writeSet.base_branch,
+        branch_name: writeSet.branch_name,
+        title: writeSet.title,
+        body_present: typeof writeSet.body === "string" && writeSet.body.length > 0,
+        plan_artifact_hash: authorization.plan_artifact_hash,
+        write_set_hash: authorization.write_set_hash,
+        file_count: writeSet.files.length,
+        files: writeSet.files.map((file) => ({
+          path: file.path,
+          action: file.action,
+          content_sha256: hashJson({ content: file.content }),
+        })),
+      },
+    };
+    witnessRow.content_hash = hashJson({
+      ts: witnessRow.ts,
+      type: witnessRow.type,
+      commit_id: witnessRow.commit_id,
+      artifact_id: witnessRow.artifact_id,
+      actor: witnessRow.actor,
+      payload: witnessRow.payload,
+    });
+
+    let witnessId;
+    try {
+      witnessId = await insertWitnessEvent(witnessRow, supabaseUrl, supabaseKey);
+    } catch (_err) {
+      return sendJson(res, 502, { ok: false, error: "witness_insert_failed" });
+    }
 
     let installationToken;
     try {
@@ -317,7 +351,6 @@ module.exports = async (req, res) => {
       });
     }
 
-    // 1) Resolve base branch SHA.
     let baseRef;
     try {
       baseRef = await githubRequest(
@@ -337,7 +370,6 @@ module.exports = async (req, res) => {
 
     const baseSha = baseRef && baseRef.object && baseRef.object.sha;
 
-    // 2) Create target branch at base SHA.
     try {
       await githubRequest(
         installationToken,
@@ -356,7 +388,6 @@ module.exports = async (req, res) => {
       });
     }
 
-    // 3) Apply each file in exact provided order with exact provided bytes.
     for (const file of writeSet.files) {
       const encodedPath = encodePathForGitHub(file.path);
       const message = `founderos commit.execute ${file.action} ${file.path}`;
@@ -423,7 +454,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 4) Open PR from exact branch to exact base.
     const prRequest = {
       title: writeSet.title,
       head: writeSet.branch_name,
@@ -449,72 +479,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Append-only witness record for commit execution.
-    let witnessId = null;
-    let witnessError = null;
-
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    const witnessPayload = {
-      repo: writeSet.repo,
-      branch_name: writeSet.branch_name,
-      pr_number: pullRequest.number,
-      pr_url: pullRequest.html_url,
-      write_set_hash: authorization.write_set_hash,
-      file_count: writeSet.files.length,
-    };
-
-    const witnessRow = {
-      id: randomUUID(),
-      ts: new Date().toISOString(),
-      type: "commit.executed",
-      commit_id: null,
-      artifact_id: authorization.plan_artifact_id,
-      actor: authorization.authorized_by,
-      payload: witnessPayload,
-      content_hash: createHash("sha256")
-        .update(JSON.stringify(witnessPayload))
-        .digest("hex"),
-    };
-
-    if (!supabaseUrl || !supabaseKey) {
-      witnessError = "supabase_not_configured";
-    } else {
-      try {
-        const witnessResponse = await fetch(
-          `${supabaseUrl.replace(/\/+$/, "")}/rest/v1/witness_events`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              apikey: supabaseKey,
-              authorization: `Bearer ${supabaseKey}`,
-              prefer: "return=representation",
-            },
-            body: JSON.stringify(witnessRow),
-          }
-        );
-
-        if (!witnessResponse.ok) {
-          witnessError = "supabase_insert_failed";
-        } else {
-          witnessId = witnessRow.id;
-          try {
-            const inserted = await witnessResponse.json();
-            if (Array.isArray(inserted) && inserted[0] && inserted[0].id) {
-              witnessId = inserted[0].id;
-            }
-          } catch (_err) {
-            // Keep generated witness id if response body parsing fails.
-          }
-        }
-      } catch (_err) {
-        witnessError = "supabase_insert_failed";
-      }
-    }
-
-    const responsePayload = {
+    return sendJson(res, 200, {
       ok: true,
       execution: {
         pr_url: pullRequest.html_url,
@@ -523,15 +488,12 @@ module.exports = async (req, res) => {
         repo: writeSet.repo,
         files_written: writeSet.files.length,
         write_set_hash: authorization.write_set_hash,
-        witness_id: witnessId,
       },
-    };
-
-    if (witnessError) {
-      responsePayload.witness_error = witnessError;
-    }
-
-    return sendJson(res, 200, responsePayload);
+      witness: {
+        id: witnessId,
+        type: witnessRow.type,
+      },
+    });
   } catch (_err) {
     return sendJson(res, 500, { ok: false, error: "internal_error" });
   }

@@ -1,0 +1,312 @@
+openapi: 3.1.0
+info:
+  title: FounderOS Actions API
+  version: 0.1.0
+  description: Canonical FounderOS GPT wrapper actions. Internal tools.execute remains the server-side source of truth.
+servers:
+  - url: https://founderos-alpha.vercel.app
+components:
+  securitySchemes:
+    FounderosApiKey:
+      type: apiKey
+      in: header
+      name: x-founderos-key
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        ts:
+          type: string
+          format: date-time
+      required: [ok, ts]
+    MemoryWriteRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+      required: [kind, body]
+    MemoryWriteResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+      required: [ok, id, created_at]
+    MemoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        title:
+          type: string
+          nullable: true
+        body:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required: [id, kind, body, tags, created_at]
+    MemoryQueryResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryItem'
+      required: [ok, items]
+    ToolName:
+      type: string
+      enum:
+        - health
+        - memory.write
+        - memory.query
+        - system.capabilities
+        - github.get_file
+        - github.list_tree
+        - github.create_pr
+        - tools.list
+        - agent.inspect_repo
+        - agent.self_improve
+    ToolExecuteRequest:
+      type: object
+      properties:
+        toolName:
+          $ref: '#/components/schemas/ToolName'
+        toolInput:
+          type: object
+          additionalProperties: true
+        tool_name:
+          $ref: '#/components/schemas/ToolName'
+        input:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+    ToolExecuteResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+      additionalProperties: true
+    AgentInspectRequest:
+      type: object
+      properties:
+        repo:
+          type: string
+          description: owner/repo
+        mode:
+          type: string
+          enum: [summary, self_improvement_readiness]
+        max_files:
+          type: integer
+        base_branch:
+          type: string
+      additionalProperties: false
+    AgentImproveRequest:
+      type: object
+      properties:
+        goal:
+          type: string
+        repo:
+          type: string
+          description: owner/repo
+        dry_run:
+          type: boolean
+        inspect_first:
+          type: boolean
+        base_branch:
+          type: string
+      required: [goal]
+      additionalProperties: false
+    GenericToolResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+        summary:
+          type: string
+        dry_run:
+          type: boolean
+        pr_url:
+          type: string
+          format: uri
+        branch:
+          type: string
+        commit_sha:
+          type: string
+        files_changed:
+          type: array
+          items:
+            type: string
+      additionalProperties: true
+    SystemCapabilitiesResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        ts:
+          type: string
+          format: date-time
+        auth:
+          type: object
+          additionalProperties: true
+        integrations:
+          type: object
+          additionalProperties: true
+        allowlist:
+          type: object
+          additionalProperties: true
+        readiness:
+          type: object
+          additionalProperties: true
+        enabled_tools:
+          type: array
+          items:
+            type: string
+      required: [ok, ts, integrations, readiness, enabled_tools]
+paths:
+  /api/founderos/health:
+    get:
+      security: []
+      operationId: health
+      summary: Health check
+      responses:
+        '200':
+          description: API is reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/founderos/memory/write:
+    post:
+      operationId: memoryWrite
+      summary: Write one memory item
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryWriteRequest'
+      responses:
+        '200':
+          description: Memory written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryWriteResponse'
+  /api/founderos/memory/query:
+    get:
+      operationId: memoryQuery
+      summary: Query memory items
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: query
+          name: kind
+          schema:
+            type: string
+          required: false
+        - in: query
+          name: q
+          schema:
+            type: string
+          required: false
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          required: false
+      responses:
+        '200':
+          description: Memory query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryQueryResponse'
+  /founderos/agent/inspect:
+    post:
+      operationId: agentInspect
+      summary: Inspect repository status through the tools gateway
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentInspectRequest'
+      responses:
+        '200':
+          description: Inspection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericToolResponse'
+  /founderos/agent/improve:
+    post:
+      operationId: agentImprove
+      summary: Run self-improvement flow through the tools gateway
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentImproveRequest'
+      responses:
+        '200':
+          description: Improvement result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericToolResponse'
+  /founderos/system/capabilities:
+    post:
+      operationId: systemCapabilities
+      summary: Discover configured FounderOS tooling and integration readiness
+      security:
+        - FounderosApiKey: []
+      responses:
+        '200':
+          description: Capability discovery result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemCapabilitiesResponse'

@@ -1,0 +1,18 @@
+FounderOS is a minimal startup operating system.
+
+Its purpose is to convert founder conversations into clear execution steps.
+
+Core workflow:
+
+idea → tasks → systems → execution
+
+FounderOS should prioritize:
+
+- simplicity
+- clear tasks
+- practical implementation
+- minimal architecture
+
+The founder remains the decision maker.
+
+The system organizes execution but does not make binding decisions.

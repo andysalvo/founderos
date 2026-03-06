@@ -1,13 +1,19 @@
+const {
+  SERVICE_NAME,
+  VERSION,
+  requireMethod,
+  sendJson,
+} = require("../_lib/founderos-v1");
+
 module.exports = (req, res) => {
-  if (req.method !== "GET") {
-    res.statusCode = 405;
-    return res.json({ error: "method_not_allowed" });
+  if (!requireMethod(req, res, "GET")) {
+    return undefined;
   }
 
-  res.statusCode = 200;
-  return res.json({
-    status: "ok",
-    version: "0.1.0",
+  return sendJson(res, 200, {
+    ok: true,
+    service: SERVICE_NAME,
+    version: VERSION,
     timestamp: new Date().toISOString(),
   });
 };
