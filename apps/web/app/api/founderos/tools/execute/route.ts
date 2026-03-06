@@ -31,6 +31,59 @@ const SUPPORTED_TOOLS = [
   "agent.self_improve",
 ] as const;
 
+const MCP_DOC_TEMPLATE = `# MCP
+
+FounderOS exposes MCP as a thin adapter layer.
+
+- MCP endpoint: \`POST /api/mcp\`
+- Core logic remains in \`tools.execute\`
+- MCP tools call existing FounderOS endpoints and do not duplicate orchestration
+`;
+
+const OPENCLAW_BRIDGE_DOC_TEMPLATE = `# OpenClaw Bridge (Planned)
+
+OpenClaw will connect as a runtime consumer of FounderOS MCP tools.
+
+Connection path:
+- OpenClaw -> FounderOS MCP (\`/api/mcp\`) -> FounderOS wrappers/tools.execute
+
+Safety constraints that remain:
+- \`x-founderos-key\` auth
+- ALLOWED_REPOS enforcement
+- PR-only repository writes
+- No second orchestrator outside FounderOS
+`;
+
+const CI_WORKFLOW_TEMPLATE = `name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+`;
+
 function parseAllowedRepos(): string[] {
   const raw = process.env.ALLOWED_REPOS;
   if (!raw) {
@@ -205,8 +258,11 @@ async function inspectRepo(input: Record<string, unknown>, logToMemory: boolean)
     "AGENTS.md",
     "CANON.md",
     "docs/KNOWLEDGE.md",
+    "docs/MCP.md",
+    "docs/OPENCLAW_BRIDGE.md",
     "memory/schema.sql",
     "vercel.json",
+    "apps/web/app/api/mcp/route.ts",
   ];
 
   const fileReads = await Promise.all(
@@ -238,8 +294,23 @@ async function inspectRepo(input: Record<string, unknown>, logToMemory: boolean)
   if (!openapi || !openapi.includes("agent.inspect_repo")) {
     gaps.push("OpenAPI spec does not fully describe latest tool surface.");
   }
+  if (!openapi || !openapi.includes("/founderos/agent/inspect")) {
+    gaps.push("OpenAPI spec is missing canonical wrapper endpoint `/founderos/agent/inspect`.");
+  }
+  if (!openapi || !openapi.includes("/founderos/agent/improve")) {
+    gaps.push("OpenAPI spec is missing canonical wrapper endpoint `/founderos/agent/improve`.");
+  }
   if (!fileSet.has("memory/schema.sql")) {
     gaps.push("Supabase schema file is missing from repository tree.");
+  }
+  if (!fileSet.has("apps/web/app/api/mcp/route.ts")) {
+    gaps.push("MCP adapter route is missing (`/api/mcp`).");
+  }
+  if (!readMap.get("docs/MCP.md")) {
+    gaps.push("MCP architecture doc is missing (`docs/MCP.md`).");
+  }
+  if (!readMap.get("docs/OPENCLAW_BRIDGE.md")) {
+    gaps.push("OpenClaw bridge doc is missing (`docs/OPENCLAW_BRIDGE.md`).");
   }
   const appsWebPackage = readMap.get("apps/web/package.json");
   let hasTestScript = false;
@@ -285,6 +356,9 @@ async function inspectRepo(input: Record<string, unknown>, logToMemory: boolean)
   }
   if (!openapi || !openapi.includes("agent.inspect_repo")) {
     nextBuilds.push("Update OpenAPI docs so GPT Actions reflects all available tools.");
+  }
+  if (!fileSet.has("apps/web/app/api/mcp/route.ts")) {
+    nextBuilds.push("Add a thin MCP adapter route over existing FounderOS endpoints.");
   }
   if (nextBuilds.length === 0) {
     nextBuilds.push("Run `agent.self_improve` with `dry_run=true` to generate the next safe PR.");
@@ -367,6 +441,30 @@ async function planDeterministicImprovement(params: {
     ref: params.baseBranch,
     path: "docs/openapi.founderos.yaml",
   });
+  const appsWebPackage = await safeReadFile({
+    owner: params.owner,
+    repo: params.repo,
+    ref: params.baseBranch,
+    path: "apps/web/package.json",
+  });
+  const ciWorkflow = await safeReadFile({
+    owner: params.owner,
+    repo: params.repo,
+    ref: params.baseBranch,
+    path: ".github/workflows/ci.yml",
+  });
+  const mcpDoc = await safeReadFile({
+    owner: params.owner,
+    repo: params.repo,
+    ref: params.baseBranch,
+    path: "docs/MCP.md",
+  });
+  const openclawDoc = await safeReadFile({
+    owner: params.owner,
+    repo: params.repo,
+    ref: params.baseBranch,
+    path: "docs/OPENCLAW_BRIDGE.md",
+  });
 
   const changes: Array<{ path: string; content: string }> = [];
   const filesChanged: string[] = [];
@@ -379,7 +477,59 @@ async function planDeterministicImprovement(params: {
     });
     filesChanged.push(".gitignore");
     rationale = "Prevent accidental commits of local knowledge artifacts.";
-  } else if (knowledgeDoc !== null && !knowledgeDoc.includes("agent.inspect_repo")) {
+  } else if (appsWebPackage !== null) {
+    try {
+      const parsed = JSON.parse(appsWebPackage) as {
+        scripts?: Record<string, string>;
+      };
+      if (!parsed.scripts?.test) {
+        const updated = {
+          ...parsed,
+          scripts: {
+            ...(parsed.scripts ?? {}),
+            test: "node --test tests/*.test.mjs",
+          },
+        };
+        changes.push({
+          path: "apps/web/package.json",
+          content: `${JSON.stringify(updated, null, 2)}\n`,
+        });
+        filesChanged.push("apps/web/package.json");
+        rationale = "Restore minimum test loop by ensuring a test script exists.";
+      }
+    } catch {
+      // Ignore invalid JSON and continue with deterministic checks below.
+    }
+  }
+
+  if (changes.length === 0 && ciWorkflow === null) {
+    changes.push({
+      path: ".github/workflows/ci.yml",
+      content: CI_WORKFLOW_TEMPLATE,
+    });
+    filesChanged.push(".github/workflows/ci.yml");
+    rationale = "Ensure PRs run tests in CI before merging.";
+  }
+
+  if (changes.length === 0 && mcpDoc === null) {
+    changes.push({
+      path: "docs/MCP.md",
+      content: MCP_DOC_TEMPLATE,
+    });
+    filesChanged.push("docs/MCP.md");
+    rationale = "Document MCP as a thin adapter over FounderOS control-plane logic.";
+  }
+
+  if (changes.length === 0 && openclawDoc === null) {
+    changes.push({
+      path: "docs/OPENCLAW_BRIDGE.md",
+      content: OPENCLAW_BRIDGE_DOC_TEMPLATE,
+    });
+    filesChanged.push("docs/OPENCLAW_BRIDGE.md");
+    rationale = "Document the planned OpenClaw integration boundary without changing ownership of logic.";
+  }
+
+  if (changes.length === 0 && knowledgeDoc !== null && !knowledgeDoc.includes("tools.execute")) {
     changes.push({
       path: "docs/KNOWLEDGE.md",
       content: `${knowledgeDoc.trimEnd()}
@@ -391,42 +541,26 @@ Tool surface additions:
 - tools.list
 - agent.inspect_repo
 - agent.self_improve
+
+Architecture guardrails:
+- tools.execute is the internal source of truth.
+- wrapper endpoints are natural-language entrypoints.
+- MCP is a thin adapter layer over existing FounderOS endpoints.
 `,
     });
     filesChanged.push("docs/KNOWLEDGE.md");
     rationale = "Keep docs aligned with current tool surface for reliable reasoning.";
-  } else if (
-    openapiDoc !== null &&
-    (!openapiDoc.includes("agent.inspect_repo") || !openapiDoc.includes("agent.self_improve"))
-  ) {
-    const marker = "            - github.create_pr";
-    if (!openapiDoc.includes(marker)) {
-      throw new FounderosInputError("openapi format not recognized for deterministic update");
-    }
-    const updated = openapiDoc.replace(
-      marker,
-      `${marker}
-            - tools.list
-            - agent.inspect_repo
-            - agent.self_improve`,
-    );
-    changes.push({
-      path: "docs/openapi.founderos.yaml",
-      content: updated,
-    });
-    filesChanged.push("docs/openapi.founderos.yaml");
-    rationale = "Ensure tool schema matches runtime capabilities.";
-  } else {
-    changes.push({
-      path: "docs/SELF_IMPROVE.md",
-      content: `# Self Improve
+  }
 
-FounderOS executed a deterministic self-improvement planning cycle.
-Goal: ${params.goal}
-`,
-    });
-    filesChanged.push("docs/SELF_IMPROVE.md");
-    rationale = "Create a small deterministic artifact to verify self-improvement loop.";
+  if (
+    changes.length === 0 &&
+    openapiDoc !== null &&
+    (!openapiDoc.includes("/founderos/agent/inspect") ||
+      !openapiDoc.includes("/founderos/agent/improve"))
+  ) {
+    throw new FounderosInputError(
+      "OpenAPI is missing canonical wrapper paths and requires manual update.",
+    );
   }
 
   return {
@@ -469,6 +603,48 @@ async function runSelfImprove(input: Record<string, unknown>) {
     baseBranch,
     goal,
   });
+
+  if (plan.changes.length === 0) {
+    const noChangeOutput =
+      dryRun
+        ? {
+            ok: true,
+            dry_run: true,
+            summary:
+              "No deterministic improvements available. Baseline checks are already satisfied.",
+            proposed_changes: [] as Array<{ path: string; action: string }>,
+            rationale: "Repository already matches deterministic self-improvement baseline checks.",
+            files_changed: [] as string[],
+          }
+        : {
+            ok: true,
+            dry_run: false,
+            no_changes: true,
+            summary:
+              "No deterministic improvements available. No PR was created because no safe change candidate was found.",
+            files_changed: [] as string[],
+          };
+
+    await writeMemory({
+      kind: "agent.self_improve.run",
+      title: `${dryRun ? "Self improve dry run" : "Self improve run"}: ${goal}`,
+      body: JSON.stringify(
+        {
+          goal,
+          repo: fullRepo,
+          dry_run: dryRun,
+          no_changes: true,
+          summary: noChangeOutput.summary,
+        },
+        null,
+        2,
+      ),
+      tags: ["agent", "self-improve", "no-op"],
+      source: "agent.self_improve",
+    });
+
+    return noChangeOutput;
+  }
 
   if (dryRun) {
     const dryRunOutput = {

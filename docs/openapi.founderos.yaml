@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: FounderOS Actions API
   version: 0.1.0
-  description: Minimal GPT -> Vercel Actions -> Supabase memory API.
+  description: Canonical FounderOS GPT wrapper actions. Internal tools.execute remains the server-side source of truth.
 servers:
   - url: https://founderos-alpha.vercel.app
 components:

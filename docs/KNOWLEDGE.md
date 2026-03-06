@@ -8,6 +8,14 @@ FounderOS operates in two modes:
   - `FILES:`
   - `ACTION:`
 
+Architecture model:
+
+- Wrapper endpoints are natural-language entrypoints:
+  - `POST /founderos/agent/inspect`
+  - `POST /founderos/agent/improve`
+- Internal source of truth is `POST /api/founderos/tools/execute`.
+- MCP (`POST /api/mcp`) is adapter-only and forwards into existing FounderOS paths.
+
 Tool honesty:
 
 - Never claim a tool action happened unless confirmed by output.

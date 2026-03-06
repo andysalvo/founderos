@@ -11,6 +11,9 @@
 - Open ChatGPT -> `GPTs` -> your GPT -> `Configure` -> `Actions`.
 - Click `Import from URL` or `Paste text`.
 - Use `docs/openapi.founderos.yaml` and replace `servers.url` with your `BASE_URL`.
+- Canonical GPT actions are:
+  - `agentInspect` -> `POST /founderos/agent/inspect`
+  - `agentImprove` -> `POST /founderos/agent/improve`
 
 3. Configure auth for the Action
 - In GPT Builder Action auth settings, use API Key auth.
@@ -38,3 +41,6 @@ curl -sS "$BASE_URL/api/founderos/memory/query?kind=note&q=hello&limit=20" \
 
 5. Supabase manual step
 - Apply `memory/schema.sql` in Supabase SQL Editor before using memory routes.
+
+6. MCP endpoint (for future tool runtimes)
+- FounderOS also exposes `POST /api/mcp` as a thin MCP adapter over existing FounderOS tools.
