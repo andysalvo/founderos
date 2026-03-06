@@ -95,6 +95,8 @@ components:
             - github.get_file
             - github.list_tree
             - github.create_pr
+            - tools.list
+            - agent.self_improve
         input:
           type: object
           additionalProperties: true
