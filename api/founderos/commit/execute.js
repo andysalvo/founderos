@@ -303,8 +303,8 @@ module.exports = async (req, res) => {
 
     const appId = process.env.GITHUB_APP_ID;
     const installationId = process.env.GITHUB_INSTALLATION_ID;
-    const rawPrivateKey = process.env.GITHUB_APP_PRIVATE_KEY;
-    const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
+    const rawKey = process.env.GITHUB_APP_PRIVATE_KEY || '';
+    const privateKey = rawKey.replace(/\\n/g, '\n');
 
     let installationToken;
     try {
