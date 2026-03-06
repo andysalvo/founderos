@@ -380,6 +380,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/capabilities/check:
+    post:
+      operationId: capabilitiesCheck
+      summary: POST mirror of capabilities for GPT Action auth diagnostics
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ping:
+                  type: string
+                  description: Optional no-op field for clients that require a concrete JSON object schema.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Capabilities returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilitiesResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/founderos/precommit/plan:
     post:
       operationId: precommitPlan

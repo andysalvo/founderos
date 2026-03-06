@@ -6,6 +6,7 @@ Minimal APS-aligned control plane for Vercel and Custom GPT Actions.
 
 - `GET /api/founderos/health`
 - `GET /api/founderos/capabilities`
+- `POST /api/founderos/capabilities/check`
 - `POST /api/founderos/precommit/plan`
 - `POST /api/founderos/commit/execute`
 

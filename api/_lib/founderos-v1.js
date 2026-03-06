@@ -22,6 +22,13 @@ const ENDPOINTS = [
     purpose: "Describe the exact v1 contract and commitment boundary.",
   },
   {
+    operationId: "capabilitiesCheck",
+    method: "POST",
+    path: "/api/founderos/capabilities/check",
+    auth: "apiKey",
+    purpose: "POST mirror of capabilities for GPT Action auth diagnostics and compatibility.",
+  },
+  {
     operationId: "precommitPlan",
     method: "POST",
     path: "/api/founderos/precommit/plan",

@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 
 const healthHandler = require("../api/founderos/health.js");
 const capabilitiesHandler = require("../api/founderos/capabilities.js");
+const capabilitiesCheckHandler = require("../api/founderos/capabilities/check.js");
 const precommitPlanHandler = require("../api/founderos/precommit/plan.js");
 const commitExecuteHandler = require("../api/founderos/commit/execute.js");
 
@@ -51,6 +52,7 @@ test("OpenAPI surface is exactly the minimal v1 contract", async () => {
   for (const path of [
     "/api/founderos/health:",
     "/api/founderos/capabilities:",
+    "/api/founderos/capabilities/check:",
     "/api/founderos/precommit/plan:",
     "/api/founderos/commit/execute:",
   ]) {
@@ -76,7 +78,7 @@ test("health handler matches the documented shape", async () => {
   assert.equal(response.json.ok, true);
 });
 
-test("capabilities requires auth and returns only the four active endpoints", async () => {
+test("capabilities requires auth and returns only the five active endpoints", async () => {
   const unauthorized = await invoke(capabilitiesHandler, { method: "GET", headers: {} });
   assert.equal(unauthorized.statusCode, 401);
   assert.equal(unauthorized.json.error, "unauthorized");
@@ -92,13 +94,14 @@ test("capabilities requires auth and returns only the four active endpoints", as
   });
 
   assert.equal(authorized.statusCode, 200);
-  assert.equal(authorized.json.endpoints.length, 4);
+  assert.equal(authorized.json.endpoints.length, 5);
   assert.equal(authorized.json.openapi.path, "docs/openapi.founderos.yaml");
   assert.deepEqual(
     authorized.json.endpoints.map((item) => item.path),
     [
       "/api/founderos/health",
       "/api/founderos/capabilities",
+      "/api/founderos/capabilities/check",
       "/api/founderos/precommit/plan",
       "/api/founderos/commit/execute",
     ]
@@ -129,6 +132,31 @@ test("capabilities reports auth transport on unauthorized requests", async () =>
   assert.equal(response.json.error, "unauthorized");
   assert.equal(response.json.auth_received_via, "authorization-bearer");
   assert.equal(response.json.expected_key_configured, true);
+});
+
+test("capabilities check mirrors capabilities over POST", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+
+  const unauthorized = await invoke(capabilitiesCheckHandler, {
+    method: "POST",
+    headers: {},
+    body: {},
+  });
+
+  assert.equal(unauthorized.statusCode, 401);
+  assert.equal(unauthorized.json.auth_received_via, "none");
+
+  const authorized = await invoke(capabilitiesCheckHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {},
+  });
+
+  assert.equal(authorized.statusCode, 200);
+  assert.equal(authorized.json.ok, true);
+  assert.equal(authorized.json.endpoints.length, 5);
+  assert.equal(authorized.json.endpoints[2].path, "/api/founderos/capabilities/check");
 });
 
 test("precommit plan stays proposal-only", async () => {

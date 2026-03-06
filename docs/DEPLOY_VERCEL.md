@@ -6,6 +6,7 @@ This repo deploys as a minimal Node/Vercel function set from the root `api/` dir
 
 - `GET /api/founderos/health`
 - `GET /api/founderos/capabilities`
+- `POST /api/founderos/capabilities/check`
 - `POST /api/founderos/precommit/plan`
 - `POST /api/founderos/commit/execute`
 
@@ -38,6 +39,7 @@ Apply [`infra/supabase/witness_events.sql`](/Users/andysalvo_1/Documents/GitHub/
 4. After deployment, verify:
    - `GET https://YOUR-DOMAIN/api/founderos/health`
    - `GET https://YOUR-DOMAIN/api/founderos/capabilities` with `x-founderos-key`
+   - `POST https://YOUR-DOMAIN/api/founderos/capabilities/check` with `x-founderos-key`
 5. Keep the canonical schema at [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml) synchronized with the deployed code. The contract test covers this locally and in CI.
 
 GPT Builder reachability note:

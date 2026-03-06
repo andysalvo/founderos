@@ -29,6 +29,7 @@ Use the text in [`docs/GPT_INSTRUCTIONS.md`](/Users/andysalvo_1/Documents/GitHub
 ## Troubleshooting
 
 - If `health` works but `capabilities` fails inside GPT Builder, delete and recreate the Action from the current schema.
+- If `capabilities` still shows `auth_received_via: "none"`, test `capabilitiesCheck` next. It is the same protected contract check over `POST`.
 - Keep the canonical Builder auth config as `x-founderos-key`.
 - Founderos also tolerates `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` as a compatibility fallback for GPT action transport of the same secret.
 - Do not point GPT Builder at a Vercel preview or deployment URL that is behind Vercel Authentication. GPT Actions cannot complete that SSO flow and will fail with `ClientResponseError` before your handler runs.
