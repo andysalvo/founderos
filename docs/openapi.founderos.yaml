@@ -86,7 +86,7 @@ components:
     ToolExecuteRequest:
       type: object
       properties:
-        tool_name:
+        toolName:
           type: string
           enum:
             - health
@@ -97,10 +97,10 @@ components:
             - github.create_pr
             - tools.list
             - agent.self_improve
-        input:
+        toolInput:
           type: object
           additionalProperties: true
-      required: [tool_name]
+      required: [toolName, toolInput]
     ToolExecuteResponse:
       type: object
       properties:

@@ -57,26 +57,14 @@ function normalizeToolCall(raw: Record<string, unknown>): {
   toolName: string;
   toolInput: Record<string, unknown>;
 } {
-  const nameFromSnake = raw.tool_name;
-  const nameFromCamel = raw.toolName;
-  const toolNameRaw =
-    typeof nameFromSnake === "string" && nameFromSnake.trim().length > 0
-      ? nameFromSnake
-      : nameFromCamel;
-
+  const toolNameRaw = raw.toolName;
   if (typeof toolNameRaw !== "string" || toolNameRaw.trim().length === 0) {
-    throw new FounderosInputError("tool_name is required");
+    throw new FounderosInputError("toolName is required");
   }
 
-  const inputRaw =
-    raw.input !== undefined
-      ? raw.input
-      : raw.toolInput !== undefined
-        ? raw.toolInput
-        : {};
-
+  const inputRaw = raw.toolInput;
   if (!isRecord(inputRaw)) {
-    throw new FounderosInputError("input must be a JSON object");
+    throw new FounderosInputError("toolInput must be a JSON object");
   }
 
   return {
