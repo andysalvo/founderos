@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: Minimal APS-aligned control plane for a Custom GPT action backend on Vercel.
 servers:
-  - url: https://founderos-alpha.vercel.app
+  - url: https://founderos-5hj8l08i5-andysalvos-projects.vercel.app
 components:
   securitySchemes:
     FounderosApiKey:
@@ -17,17 +17,29 @@ components:
       properties:
         ok:
           type: boolean
-          const: false
+          enum: [false]
         error:
           type: string
       required: [ok, error]
       additionalProperties: true
+    RequestIdErrorResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+        request_id:
+          type: string
+      required: [ok, error, request_id]
+      additionalProperties: false
     HealthResponse:
       type: object
       properties:
         ok:
           type: boolean
-          const: true
+          enum: [true]
         service:
           type: string
         version:
@@ -57,7 +69,7 @@ components:
       properties:
         ok:
           type: boolean
-          const: true
+          enum: [true]
         service:
           type: string
         version:
@@ -82,6 +94,43 @@ components:
               type: boolean
           required: [type, header, configured]
           additionalProperties: false
+        operator_inputs:
+          type: object
+          properties:
+            required_env:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  required_for:
+                    type: array
+                    items:
+                      type: string
+                  configured:
+                    type: boolean
+                required: [name, required_for, configured]
+            missing_env:
+              type: array
+              items:
+                type: string
+            readiness:
+              type: object
+              properties:
+                planning_ready:
+                  type: boolean
+                openclaw_runtime_ready:
+                  type: boolean
+                commit_ready:
+                  type: boolean
+                gpt_action_ready:
+                  type: boolean
+              required: [planning_ready, openclaw_runtime_ready, commit_ready, gpt_action_ready]
+            next_operator_steps:
+              type: array
+              items:
+                type: string
         boundaries:
           type: object
           properties:
@@ -123,6 +172,7 @@ components:
         - version
         - openapi
         - auth
+        - operator_inputs
         - boundaries
         - protected_paths
         - allowed_repos
@@ -130,11 +180,15 @@ components:
       additionalProperties: false
     PrecommitPlanRequest:
       type: object
+      description: Send only a plain-language task request unless scope or constraints are necessary.
       properties:
         user_request:
           type: string
+          description: Plain-language request for proposal mode. Best reliability comes from sending only this field.
+          example: Make Founderos more usable inside one thread while preserving the agency boundary.
         scope:
           type: object
+          description: Optional repo scope for planning only.
           properties:
             repo:
               type: string
@@ -151,6 +205,7 @@ components:
           additionalProperties: false
         constraints:
           type: array
+          description: Optional guardrails for the proposal.
           items:
             type: string
       required: [user_request]
@@ -165,7 +220,7 @@ components:
           format: date-time
         mode:
           type: string
-          const: proposal_only
+          enum: [proposal_only]
         human_readable_summary:
           type: string
         intended_tools:
@@ -240,10 +295,62 @@ components:
       properties:
         ok:
           type: boolean
-          const: true
+          enum: [true]
         artifact:
           $ref: "#/components/schemas/PlanArtifact"
       required: [ok, artifact]
+      additionalProperties: false
+    OpenClawInspectRequest:
+      type: object
+      description: Analysis-only OpenClaw request. Use this for inspection and proposal support, not execution.
+      properties:
+        task:
+          type: string
+          description: Plain-language analysis task. Must not ask for execution, commits, deployment, or writes.
+          example: Inspect the current Founderos contract and identify the next smallest APS-safe improvement.
+        repo:
+          type: string
+          description: Optional repo identifier for context only.
+        branch:
+          type: string
+          description: Optional branch name for context only.
+        context:
+          type: string
+          description: Optional extra analysis context. Must remain read-only and proposal-oriented.
+      required: [task]
+      additionalProperties: false
+    OpenClawInspectResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        runtime:
+          type: string
+          enum: [openclaw]
+        mode:
+          type: string
+          enum: [analysis_only]
+        summary:
+          type: string
+        findings:
+          type: array
+          items:
+            type: string
+        suggested_next_actions:
+          type: array
+          items:
+            type: string
+        request_id:
+          type: string
+      required:
+        - ok
+        - runtime
+        - mode
+        - summary
+        - findings
+        - suggested_next_actions
+        - request_id
       additionalProperties: false
     WriteFile:
       type: object
@@ -304,7 +411,7 @@ components:
       properties:
         ok:
           type: boolean
-          const: true
+          enum: [true]
         execution:
           type: object
           properties:
@@ -382,6 +489,7 @@ paths:
     post:
       operationId: precommitPlan
       summary: Produce a proposal artifact only
+      description: Call this with a single plain-language `user_request` string. Do not send authorization or write_set fields.
       security:
         - FounderosApiKey: []
       requestBody:
@@ -390,6 +498,8 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PrecommitPlanRequest"
+            example:
+              user_request: Make Founderos more usable inside one thread while preserving the agency boundary.
       responses:
         "200":
           description: Proposal artifact returned
@@ -415,6 +525,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/runtime/openclaw/inspect:
+    post:
+      operationId: openclawInspect
+      summary: Run analysis-only OpenClaw inspection through Founderos
+      description: |
+        Call OpenClaw server-side through Founderos for APS-safe inspection and proposal support.
+        This route rejects write, commit, deploy, or execute-oriented requests.
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenClawInspectRequest"
+            example:
+              task: Inspect the current Founderos contract and identify the next smallest APS-safe improvement.
+              repo: andysalvo/founderos
+              branch: main
+      responses:
+        "200":
+          description: OpenClaw analysis returned in normalized Founderos format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenClawInspectResponse"
+        "400":
+          description: Invalid request body or write/commit-oriented request rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestIdErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestIdErrorResponse"
+        "500":
+          description: OpenClaw runtime not configured in Vercel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestIdErrorResponse"
+        "502":
+          description: OpenClaw upstream failure or unusable response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestIdErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestIdErrorResponse"
   /api/founderos/commit/execute:
     post:
       operationId: commitExecute

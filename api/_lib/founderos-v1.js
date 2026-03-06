@@ -29,6 +29,13 @@ const ENDPOINTS = [
     purpose: "Return a proposal artifact only. No durable writes or external side effects.",
   },
   {
+    operationId: "openclawInspect",
+    method: "POST",
+    path: "/api/founderos/runtime/openclaw/inspect",
+    auth: "apiKey",
+    purpose: "Run analysis-only OpenClaw inspection behind Founderos without changing repo state.",
+  },
+  {
     operationId: "commitExecute",
     method: "POST",
     path: "/api/founderos/commit/execute",
@@ -39,6 +46,44 @@ const ENDPOINTS = [
 
 const PROTECTED_PATH_PREFIXES = ["api/founderos/", ".github/workflows/", ".env"];
 const PROTECTED_PATH_EXACT = new Set(["docs/openapi.founderos.yaml", "vercel.json"]);
+const REQUIRED_ENV_VARS = [
+  {
+    name: "FOUNDEROS_WRITE_KEY",
+    required_for: ["capabilities", "precommitPlan", "openclawInspect", "commitExecute"],
+  },
+  {
+    name: "OPENCLAW_BASE_URL",
+    required_for: ["openclawInspect"],
+  },
+  {
+    name: "OPENCLAW_API_KEY",
+    required_for: ["openclawInspect"],
+  },
+  {
+    name: "ALLOWED_REPOS",
+    required_for: ["commitExecute"],
+  },
+  {
+    name: "GITHUB_APP_ID",
+    required_for: ["commitExecute"],
+  },
+  {
+    name: "GITHUB_INSTALLATION_ID",
+    required_for: ["commitExecute"],
+  },
+  {
+    name: "GITHUB_APP_PRIVATE_KEY",
+    required_for: ["commitExecute"],
+  },
+  {
+    name: "SUPABASE_URL",
+    required_for: ["commitExecute"],
+  },
+  {
+    name: "SUPABASE_SERVICE_ROLE_KEY",
+    required_for: ["commitExecute"],
+  },
+];
 
 function sendJson(res, statusCode, payload, extraHeaders) {
   res.statusCode = statusCode;
@@ -92,8 +137,29 @@ function requireMethod(req, res, method) {
   return false;
 }
 
+function extractApiKey(req) {
+  const headers = req && req.headers ? req.headers : {};
+  const direct = typeof headers[AUTH_HEADER] === "string" ? headers[AUTH_HEADER].trim() : "";
+  if (direct) {
+    return direct;
+  }
+
+  const authorization =
+    typeof headers.authorization === "string" ? headers.authorization.trim() : "";
+  if (!authorization) {
+    return "";
+  }
+
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  if (bearerMatch && bearerMatch[1]) {
+    return bearerMatch[1].trim();
+  }
+
+  return authorization;
+}
+
 function requireApiKey(req, res) {
-  const provided = req.headers && req.headers[AUTH_HEADER];
+  const provided = extractApiKey(req);
   if (provided && provided === process.env.FOUNDEROS_WRITE_KEY) {
     return true;
   }
@@ -232,6 +298,47 @@ function getAllowedRepos() {
     .filter(Boolean);
 }
 
+function isEnvConfigured(name) {
+  return Boolean(process.env[name] && String(process.env[name]).trim());
+}
+
+function buildOperatorInputs() {
+  const required_env = REQUIRED_ENV_VARS.map((item) => ({
+    name: item.name,
+    required_for: item.required_for,
+    configured: isEnvConfigured(item.name),
+  }));
+  const missing_env = required_env.filter((item) => !item.configured).map((item) => item.name);
+
+  return {
+    required_env,
+    missing_env,
+    readiness: {
+      planning_ready: isEnvConfigured("FOUNDEROS_WRITE_KEY"),
+      openclaw_runtime_ready:
+        isEnvConfigured("OPENCLAW_BASE_URL") && isEnvConfigured("OPENCLAW_API_KEY"),
+      commit_ready: REQUIRED_ENV_VARS.every((item) => {
+        if (!item.required_for.includes("commitExecute")) {
+          return true;
+        }
+        return isEnvConfigured(item.name);
+      }),
+      gpt_action_ready: isEnvConfigured("FOUNDEROS_WRITE_KEY"),
+    },
+    next_operator_steps:
+      missing_env.length > 0
+        ? [
+            "Add the missing environment variables in Vercel.",
+            "Update the GPT Action API key to match FOUNDEROS_WRITE_KEY after any rotation.",
+            "Call GET /api/founderos/capabilities again to confirm readiness before commit execution.",
+          ]
+        : [
+            "GPT planning is ready.",
+            "Commit execution is configured if the listed repo is in ALLOWED_REPOS.",
+          ],
+  };
+}
+
 function buildCapabilitiesResponse() {
   return {
     ok: true,
@@ -262,6 +369,7 @@ function buildCapabilitiesResponse() {
       "vercel.json",
     ],
     allowed_repos: getAllowedRepos(),
+    operator_inputs: buildOperatorInputs(),
     endpoints: ENDPOINTS,
   };
 }
@@ -269,11 +377,13 @@ function buildCapabilitiesResponse() {
 module.exports = {
   AUTH_HEADER,
   ENDPOINTS,
+  extractApiKey,
   OPENAPI_PATH,
   OPENAPI_VERSION,
   SERVICE_NAME,
   VERSION,
   buildCapabilitiesResponse,
+  buildOperatorInputs,
   buildPlanArtifact,
   getAllowedRepos,
   hashJson,

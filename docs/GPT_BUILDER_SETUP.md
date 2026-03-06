@@ -3,12 +3,9 @@
 ## What to import
 
 Use the canonical schema at [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml).
+It already points at production:
 
-Before pasting it into GPT Builder, replace:
-
-- `https://YOUR-PROJECT.vercel.app`
-
-with your actual production base URL.
+- `https://founderos-5hj8l08i5-andysalvos-projects.vercel.app`
 
 ## GPT Builder steps
 
@@ -25,6 +22,18 @@ Use the text in [`docs/GPT_INSTRUCTIONS.md`](/Users/andysalvo_1/Documents/GitHub
 
 ## Minimal action flow
 
-1. Call `precommitPlan` to produce a proposal artifact.
-2. Present the artifact to the human for review.
-3. Only call `commitExecute` after the human has frozen the exact `write_set` and explicit authorization fields.
+1. Call `capabilities` first when the GPT is uncertain what operator inputs are still missing.
+2. If `operator_inputs.missing_env` is non-empty, ask the founder to place those values in Vercel instead of guessing.
+3. Call `openclawInspect` for analysis-only runtime support when deeper inspection is needed.
+4. Call `precommitPlan` to produce a proposal artifact.
+5. Present the artifact to the human for review.
+6. Only call `commitExecute` after the human has frozen the exact `write_set` and explicit authorization fields.
+
+GPT Builder still talks only to Founderos. It does not call OpenClaw directly.
+
+## Troubleshooting
+
+- If curl works but the GPT Action fails, delete and recreate the Action from the current schema.
+- Reconfirm the Action auth header is exactly `x-founderos-key`.
+- Reconfirm the Action API key exactly matches `FOUNDEROS_WRITE_KEY`.
+- Founderos also accepts `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` as a compatibility fallback for GPT action transport, but the canonical Builder config remains `x-founderos-key`.

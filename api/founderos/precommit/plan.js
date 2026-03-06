@@ -7,6 +7,18 @@ const {
   sendJson,
 } = require("../../_lib/founderos-v1");
 
+function normalizeUserRequest(body) {
+  const candidateKeys = ["user_request", "userRequest", "request", "goal", "task", "prompt"];
+
+  for (const key of candidateKeys) {
+    if (typeof body[key] === "string" && body[key].trim()) {
+      return body[key].trim();
+    }
+  }
+
+  return "";
+}
+
 module.exports = async (req, res) => {
   if (!requireMethod(req, res, "POST")) {
     return undefined;
@@ -22,7 +34,7 @@ module.exports = async (req, res) => {
   }
 
   const body = parsed.value;
-  const userRequest = typeof body.user_request === "string" ? body.user_request.trim() : "";
+  const userRequest = normalizeUserRequest(body);
   if (!userRequest) {
     return sendJson(res, 400, { ok: false, error: "user_request_required" });
   }

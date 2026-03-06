@@ -7,12 +7,17 @@ This repo deploys as a minimal Node/Vercel function set from the root `api/` dir
 - `GET /api/founderos/health`
 - `GET /api/founderos/capabilities`
 - `POST /api/founderos/precommit/plan`
+- `POST /api/founderos/runtime/openclaw/inspect`
 - `POST /api/founderos/commit/execute`
 
 ## Required environment variables
 
 - `FOUNDEROS_WRITE_KEY`
   Shared API key expected in the `x-founderos-key` header for every authenticated route.
+- `OPENCLAW_BASE_URL`
+  Exact OpenClaw analysis endpoint Founderos should call server-side.
+- `OPENCLAW_API_KEY`
+  Bearer token used by Founderos when calling OpenClaw server-side.
 - `ALLOWED_REPOS`
   Comma-separated GitHub repos allowed for `commit.execute`, for example `owner/repo,owner/repo-two`.
 - `GITHUB_APP_ID`
@@ -38,4 +43,20 @@ Apply [`infra/supabase/witness_events.sql`](/Users/andysalvo_1/Documents/GitHub/
 4. After deployment, verify:
    - `GET https://YOUR-DOMAIN/api/founderos/health`
    - `GET https://YOUR-DOMAIN/api/founderos/capabilities` with `x-founderos-key`
+   - `POST https://YOUR-DOMAIN/api/founderos/runtime/openclaw/inspect` with `x-founderos-key`
 5. Keep the canonical schema at [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml) synchronized with the deployed code. The contract test covers this locally and in CI.
+
+Builder compatibility note:
+- Founderos also tolerates `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` for authenticated routes because some GPT action flows may present the same secret that way. This does not grant any extra authority.
+
+## OpenClaw smoke test
+
+```bash
+BASE_URL="https://founderos-5hj8l08i5-andysalvos-projects.vercel.app"
+KEY="YOUR_FOUNDEROS_WRITE_KEY"
+
+curl -sS -X POST "$BASE_URL/api/founderos/runtime/openclaw/inspect" \
+  -H "content-type: application/json" \
+  -H "x-founderos-key: $KEY" \
+  -d '{"task":"Inspect the current Founderos contract and identify the next smallest APS-safe improvement."}'
+```

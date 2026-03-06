@@ -7,6 +7,7 @@ Minimal APS-aligned control plane for Vercel and Custom GPT Actions.
 - `GET /api/founderos/health`
 - `GET /api/founderos/capabilities`
 - `POST /api/founderos/precommit/plan`
+- `POST /api/founderos/runtime/openclaw/inspect`
 - `POST /api/founderos/commit/execute`
 
 The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml).
@@ -14,6 +15,7 @@ The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Docum
 ## Architecture
 
 - `precommit/plan` is proposal-only. It can summarize and shape intent, but it does not write files or call external systems.
+- `runtime/openclaw/inspect` is analysis-only. It lets Founderos call OpenClaw behind server-side secrets without exposing direct runtime access to GPT Builder.
 - `commit/execute` is the only durable-write path. It is mechanical, hash-bound, and requires explicit authorization.
 - Witness logging happens before GitHub writes begin. If witness recording is unavailable, execution fails closed.
 - GitHub App and Supabase credentials remain server-side.

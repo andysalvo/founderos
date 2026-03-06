@@ -2,18 +2,19 @@
 
 ## Protected boundaries
 
-- Auth boundary: authenticated routes require `x-founderos-key` and server-side secret validation.
+- Auth boundary: authenticated routes require the Founderos write key with server-side secret validation. The canonical header is `x-founderos-key`; `Authorization: Bearer <key>` is tolerated only as a compatibility fallback for the same secret.
 - Protected path policy: `commit.execute` rejects writes to `api/founderos/**`, `docs/openapi.founderos.yaml`, `.env*`, `.github/workflows/**`, and `vercel.json`.
 - Witness invariant: `commit.execute` fails closed unless it can append a witness record before GitHub writes begin.
 - Explicit authorization: `commit.execute` requires an authorization object and rejects any write set whose hash does not match the authorized hash.
 - Server-side secret handling: GitHub App and Supabase credentials stay server-side only.
+- Self-awareness is diagnostic only: the system may report which environment variables are missing, but it must not reveal or synthesize secret values.
 
 ## Non-goals for v1
 
 - No MCP surface on the active deploy path.
 - No memory read/write endpoints.
 - No agent inspect/improve wrappers.
-- No OpenClaw integration beyond documentation notes in `legacy/`.
+- No direct GPT access to OpenClaw. OpenClaw remains available only through the analysis-only Founderos route.
 - No autonomous self-updating behavior.
 - No general-purpose agent platform features.
 
