@@ -13,8 +13,10 @@ Architecture model:
 - Wrapper endpoints are natural-language entrypoints:
   - `POST /founderos/agent/inspect`
   - `POST /founderos/agent/improve`
+  - `POST /founderos/system/capabilities`
 - Internal source of truth is `POST /api/founderos/tools/execute`.
 - MCP (`POST /api/mcp`) is adapter-only and forwards into existing FounderOS paths.
+- Capability discovery should run first when tooling availability is unknown.
 
 Tool honesty:
 

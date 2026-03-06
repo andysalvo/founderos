@@ -12,6 +12,7 @@
 - Click `Import from URL` or `Paste text`.
 - Use `docs/openapi.founderos.yaml` and replace `servers.url` with your `BASE_URL`.
 - Canonical GPT actions are:
+  - `systemCapabilities` -> `POST /founderos/system/capabilities`
   - `agentInspect` -> `POST /founderos/agent/inspect`
   - `agentImprove` -> `POST /founderos/agent/improve`
 

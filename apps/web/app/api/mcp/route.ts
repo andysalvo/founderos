@@ -185,6 +185,18 @@ function buildServer(request: Request): McpServer {
   );
 
   server.registerTool(
+    "founderos.system_capabilities",
+    {
+      title: "FounderOS System Capabilities",
+      description: "Discover configured integrations and enabled tool surface without exposing secret values.",
+    },
+    async () => {
+      const result = await postJson(request, "/founderos/system/capabilities", {});
+      return toMcpToolResult(result, "FounderOS system capabilities");
+    },
+  );
+
+  server.registerTool(
     "founderos.memory_query",
     {
       title: "FounderOS Memory Query",

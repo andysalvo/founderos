@@ -14,6 +14,7 @@ This MCP layer is intentionally thin:
 
 - `founderos.inspect` -> `POST /founderos/agent/inspect`
 - `founderos.improve` -> `POST /founderos/agent/improve`
+- `founderos.system_capabilities` -> `POST /founderos/system/capabilities`
 - `founderos.tools_list` -> `POST /api/founderos/tools/execute` (`tools.list`)
 - `founderos.memory_query` -> `GET /api/founderos/memory/query`
 - `founderos.memory_write` -> `POST /api/founderos/memory/write`

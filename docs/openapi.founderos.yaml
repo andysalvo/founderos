@@ -89,6 +89,7 @@ components:
         - health
         - memory.write
         - memory.query
+        - system.capabilities
         - github.get_file
         - github.list_tree
         - github.create_pr
@@ -150,6 +151,31 @@ components:
     GenericToolResponse:
       type: object
       additionalProperties: true
+    SystemCapabilitiesResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        ts:
+          type: string
+          format: date-time
+        auth:
+          type: object
+          additionalProperties: true
+        integrations:
+          type: object
+          additionalProperties: true
+        allowlist:
+          type: object
+          additionalProperties: true
+        readiness:
+          type: object
+          additionalProperties: true
+        enabled_tools:
+          type: array
+          items:
+            type: string
+      required: [ok, ts, integrations, readiness, enabled_tools]
 paths:
   /api/founderos/health:
     get:
@@ -251,3 +277,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericToolResponse'
+  /founderos/system/capabilities:
+    post:
+      operationId: systemCapabilities
+      summary: Discover configured FounderOS tooling and integration readiness
+      security:
+        - FounderosApiKey: []
+      responses:
+        '200':
+          description: Capability discovery result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemCapabilitiesResponse'

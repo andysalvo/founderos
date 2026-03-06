@@ -23,6 +23,7 @@ const SUPPORTED_TOOLS = [
   "health",
   "memory.write",
   "memory.query",
+  "system.capabilities",
   "github.get_file",
   "github.list_tree",
   "github.create_pr",
@@ -97,6 +98,75 @@ function parseAllowedRepos(): string[] {
     throw new FounderosInputError("ALLOWED_REPOS is empty");
   }
   return repos;
+}
+
+function parseOptionalAllowedRepos(): string[] {
+  const raw = process.env.ALLOWED_REPOS;
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(/[\n,]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function hasEnv(name: string): boolean {
+  return Boolean(process.env[name] && process.env[name]?.trim().length);
+}
+
+function systemCapabilities() {
+  const allowedRepos = parseOptionalAllowedRepos();
+  const supabaseReady = hasEnv("SUPABASE_URL") && hasEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const githubReady =
+    hasEnv("GITHUB_APP_ID") &&
+    hasEnv("GITHUB_APP_PRIVATE_KEY") &&
+    hasEnv("GITHUB_INSTALLATION_ID") &&
+    allowedRepos.length > 0;
+  const authReady = hasEnv("FOUNDEROS_WRITE_KEY");
+  const openaiReady = hasEnv("OPENAI_API_KEY");
+  const vercelRuntime = hasEnv("VERCEL") || hasEnv("VERCEL_ENV") || hasEnv("VERCEL_URL");
+
+  const enabledTools = ["health", "tools.list", "system.capabilities"];
+  if (supabaseReady) {
+    enabledTools.push("memory.write", "memory.query");
+  }
+  if (githubReady) {
+    enabledTools.push(
+      "github.get_file",
+      "github.list_tree",
+      "github.create_pr",
+      "agent.inspect_repo",
+      "agent.self_improve",
+    );
+  }
+
+  return {
+    ok: true,
+    ts: new Date().toISOString(),
+    auth: {
+      header: "x-founderos-key",
+      configured: authReady,
+    },
+    integrations: {
+      supabase: supabaseReady,
+      github_app: githubReady,
+      openai: openaiReady,
+      vercel_runtime: vercelRuntime,
+    },
+    allowlist: {
+      configured: allowedRepos.length > 0,
+      repos: allowedRepos,
+      repo_count: allowedRepos.length,
+    },
+    readiness: {
+      memory: supabaseReady,
+      inspect: githubReady,
+      improve: githubReady,
+      mcp: true,
+    },
+    enabled_tools: enabledTools,
+  };
 }
 
 function parseOwnerRepoString(value: string): { owner: string; repo: string } {
@@ -768,6 +838,12 @@ export async function POST(request: Request) {
       const memoryInput = parseMemoryQueryInput(toolInput);
       const items = await queryMemory(memoryInput);
       toolOutput = { ok: true, items };
+      toolStatus = "ok";
+      return NextResponse.json(toolOutput);
+    }
+
+    if (toolName === "system.capabilities") {
+      toolOutput = systemCapabilities();
       toolStatus = "ok";
       return NextResponse.json(toolOutput);
     }
