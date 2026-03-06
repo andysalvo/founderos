@@ -15,6 +15,7 @@ module.exports = (req, res) => {
       { operationId: 'commitChallenge', method: 'POST', path: '/api/founderos/commit/challenge', status: 'planned' },
       { operationId: 'commitAuthorize', method: 'POST', path: '/api/founderos/commit/authorize', status: 'planned' },
       { operationId: 'commitExecute', method: 'POST', path: '/api/founderos/commit/execute', status: 'planned' },
+      { operationId: 'recordWitness', method: 'POST', path: '/api/founderos/witness/record', status: 'live' },
       { operationId: 'readWitness', method: 'GET', path: '/api/founderos/witness/events', status: 'planned' },
       { operationId: 'getArtifact', method: 'GET', path: '/api/founderos/artifacts/{id}', status: 'planned' }
     ]
