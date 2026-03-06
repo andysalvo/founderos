@@ -117,6 +117,39 @@ components:
         error:
           type: string
       additionalProperties: true
+    AgentInspectRequest:
+      type: object
+      properties:
+        repo:
+          type: string
+          description: owner/repo
+        mode:
+          type: string
+          enum: [summary, self_improvement_readiness]
+        max_files:
+          type: integer
+        base_branch:
+          type: string
+      additionalProperties: false
+    AgentImproveRequest:
+      type: object
+      properties:
+        goal:
+          type: string
+        repo:
+          type: string
+          description: owner/repo
+        dry_run:
+          type: boolean
+        inspect_first:
+          type: boolean
+        base_branch:
+          type: string
+      required: [goal]
+      additionalProperties: false
+    GenericToolResponse:
+      type: object
+      additionalProperties: true
 paths:
   /api/founderos/health:
     get:
@@ -199,3 +232,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ToolExecuteResponse'
+  /api/founderos/agent/inspect:
+    post:
+      operationId: agentInspect
+      summary: Inspect repository status through the tools gateway
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentInspectRequest'
+      responses:
+        '200':
+          description: Inspection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericToolResponse'
+  /api/founderos/agent/improve:
+    post:
+      operationId: agentImprove
+      summary: Run self-improvement flow through the tools gateway
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentImproveRequest'
+      responses:
+        '200':
+          description: Improvement result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericToolResponse'
