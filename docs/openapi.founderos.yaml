@@ -1,0 +1,472 @@
+openapi: 3.1.0
+info:
+  title: Founderos APS v1
+  version: 1.0.0
+  description: Minimal APS-aligned control plane for a Custom GPT action backend on Vercel.
+servers:
+  - url: https://YOUR-PROJECT.vercel.app
+components:
+  securitySchemes:
+    FounderosApiKey:
+      type: apiKey
+      in: header
+      name: x-founderos-key
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: false
+        error:
+          type: string
+      required: [ok, error]
+      additionalProperties: true
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        service:
+          type: string
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+      required: [ok, service, version, timestamp]
+      additionalProperties: false
+    Endpoint:
+      type: object
+      properties:
+        operationId:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        auth:
+          type: string
+        purpose:
+          type: string
+      required: [operationId, method, path, auth, purpose]
+      additionalProperties: false
+    CapabilitiesResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        service:
+          type: string
+        version:
+          type: string
+        openapi:
+          type: object
+          properties:
+            path:
+              type: string
+            version:
+              type: string
+          required: [path, version]
+          additionalProperties: false
+        auth:
+          type: object
+          properties:
+            type:
+              type: string
+            header:
+              type: string
+            configured:
+              type: boolean
+          required: [type, header, configured]
+          additionalProperties: false
+        boundaries:
+          type: object
+          properties:
+            narrow_commitment_boundary:
+              type: boolean
+            planning_only_precommit:
+              type: boolean
+            explicit_authorization_required:
+              type: boolean
+            protected_path_policy_enforced:
+              type: boolean
+            witness_before_write_required:
+              type: boolean
+            server_side_secret_handling:
+              type: boolean
+          required:
+            - narrow_commitment_boundary
+            - planning_only_precommit
+            - explicit_authorization_required
+            - protected_path_policy_enforced
+            - witness_before_write_required
+            - server_side_secret_handling
+          additionalProperties: false
+        protected_paths:
+          type: array
+          items:
+            type: string
+        allowed_repos:
+          type: array
+          items:
+            type: string
+        endpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/Endpoint"
+      required:
+        - ok
+        - service
+        - version
+        - openapi
+        - auth
+        - boundaries
+        - protected_paths
+        - allowed_repos
+        - endpoints
+      additionalProperties: false
+    PrecommitPlanRequest:
+      type: object
+      properties:
+        user_request:
+          type: string
+        scope:
+          type: object
+          properties:
+            repo:
+              type: string
+            branch:
+              type: string
+            allowed_paths:
+              type: array
+              items:
+                type: string
+            forbidden_paths:
+              type: array
+              items:
+                type: string
+          additionalProperties: false
+        constraints:
+          type: array
+          items:
+            type: string
+      required: [user_request]
+      additionalProperties: false
+    PlanArtifact:
+      type: object
+      properties:
+        id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        mode:
+          type: string
+          const: proposal_only
+        human_readable_summary:
+          type: string
+        intended_tools:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              purpose:
+                type: string
+            required: [name, purpose]
+            additionalProperties: false
+        intended_writes:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              action:
+                type: string
+                enum: [create, update, delete]
+              summary:
+                type: string
+            required: [path, action, summary]
+            additionalProperties: false
+        constraints:
+          type: array
+          items:
+            type: string
+        scope:
+          type: object
+          properties:
+            repo:
+              type: string
+            branch:
+              type: string
+            allowed_paths:
+              type: array
+              items:
+                type: string
+            forbidden_paths:
+              type: array
+              items:
+                type: string
+          required: [repo, branch, allowed_paths, forbidden_paths]
+          additionalProperties: false
+        warnings:
+          type: array
+          items:
+            type: string
+        next_step:
+          type: string
+        content_hash:
+          type: string
+      required:
+        - id
+        - created_at
+        - mode
+        - human_readable_summary
+        - intended_tools
+        - intended_writes
+        - constraints
+        - scope
+        - warnings
+        - next_step
+        - content_hash
+      additionalProperties: false
+    PrecommitPlanResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        artifact:
+          $ref: "#/components/schemas/PlanArtifact"
+      required: [ok, artifact]
+      additionalProperties: false
+    WriteFile:
+      type: object
+      properties:
+        path:
+          type: string
+        action:
+          type: string
+          enum: [create, update]
+        content:
+          type: string
+      required: [path, action, content]
+      additionalProperties: false
+    WriteSet:
+      type: object
+      properties:
+        branch_name:
+          type: string
+        base_branch:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        repo:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/WriteFile"
+          minItems: 1
+      required: [branch_name, base_branch, title, repo, files]
+      additionalProperties: false
+    CommitAuthorization:
+      type: object
+      properties:
+        plan_artifact_id:
+          type: string
+        plan_artifact_hash:
+          type: string
+        write_set_hash:
+          type: string
+        authorized_by:
+          type: string
+      required: [plan_artifact_id, plan_artifact_hash, write_set_hash, authorized_by]
+      additionalProperties: false
+    CommitExecuteRequest:
+      type: object
+      properties:
+        write_set:
+          $ref: "#/components/schemas/WriteSet"
+        authorization:
+          $ref: "#/components/schemas/CommitAuthorization"
+      required: [write_set, authorization]
+      additionalProperties: false
+    CommitExecuteResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        execution:
+          type: object
+          properties:
+            pr_url:
+              type: string
+              format: uri
+            pr_number:
+              type: integer
+            branch:
+              type: string
+            repo:
+              type: string
+            files_written:
+              type: integer
+            write_set_hash:
+              type: string
+          required: [pr_url, pr_number, branch, repo, files_written, write_set_hash]
+          additionalProperties: false
+        witness:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+          required: [id, type]
+          additionalProperties: false
+      required: [ok, execution, witness]
+      additionalProperties: false
+paths:
+  /api/founderos/health:
+    get:
+      operationId: health
+      summary: Public liveness check
+      security: []
+      responses:
+        "200":
+          description: API is reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/capabilities:
+    get:
+      operationId: capabilities
+      summary: Describe the exact v1 control-plane contract
+      security:
+        - FounderosApiKey: []
+      responses:
+        "200":
+          description: Capabilities returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapabilitiesResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/precommit/plan:
+    post:
+      operationId: precommitPlan
+      summary: Produce a proposal artifact only
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrecommitPlanRequest"
+      responses:
+        "200":
+          description: Proposal artifact returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrecommitPlanResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/commit/execute:
+    post:
+      operationId: commitExecute
+      summary: Execute one exact, pre-authorized write set
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommitExecuteRequest"
+      responses:
+        "200":
+          description: Pull request opened from the exact authorized write set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitExecuteResponse"
+        "400":
+          description: Invalid request body or hash mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Repo or path rejected by server policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing required server configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Witness sink or GitHub API failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

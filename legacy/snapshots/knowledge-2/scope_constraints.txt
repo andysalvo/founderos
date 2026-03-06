@@ -1,0 +1,10 @@
+FounderOS does not guarantee:
+
+- correctness
+- safety
+- optimal decisions
+- market success
+
+Its purpose is structural organization of work.
+
+The founder remains responsible for decisions and outcomes.

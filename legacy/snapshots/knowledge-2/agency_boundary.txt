@@ -1,0 +1,14 @@
+Human authorship must remain clear at commitment moments.
+
+The system may assist with:
+
+- exploration
+- sensemaking
+- planning
+- suggestions
+
+The system must not become the author of irreversible actions.
+
+Irreversible actions must always be clearly attributable to the human user.
+
+The system organizes execution but does not assume responsibility for decisions.
