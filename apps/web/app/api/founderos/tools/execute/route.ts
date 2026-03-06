@@ -242,12 +242,12 @@ async function inspectRepo(input: Record<string, unknown>, logToMemory: boolean)
     gaps.push("Supabase schema file is missing from repository tree.");
   }
   const appsWebPackage = readMap.get("apps/web/package.json");
-  let testingLoop = false;
+  let hasTestScript = false;
   if (appsWebPackage) {
     try {
       const parsed = JSON.parse(appsWebPackage) as { scripts?: Record<string, string> };
-      testingLoop = Boolean(parsed.scripts?.test);
-      if (!testingLoop) {
+      hasTestScript = Boolean(parsed.scripts?.test);
+      if (!hasTestScript) {
         gaps.push("No `test` script found in apps/web/package.json.");
       }
     } catch {
@@ -257,19 +257,28 @@ async function inspectRepo(input: Record<string, unknown>, logToMemory: boolean)
     gaps.push("apps/web/package.json could not be read.");
   }
 
+  const hasCiWorkflow =
+    fileSet.has(".github/workflows/ci.yml") || fileSet.has(".github/workflows/test.yml");
+  if (!hasCiWorkflow) {
+    gaps.push("No CI workflow found to run tests on pull requests.");
+  }
+
   const readiness = {
     self_improvement: Boolean(
       capabilities.includes("agent.self_improve") &&
         capabilities.includes("github.create_pr"),
     ),
     repo_write: capabilities.includes("github.create_pr"),
-    testing_loop: testingLoop,
+    testing_loop: hasTestScript && hasCiWorkflow,
     deployment_loop: fileSet.has("vercel.json"),
   };
 
   const nextBuilds: string[] = [];
-  if (!readiness.testing_loop) {
+  if (!hasTestScript) {
     nextBuilds.push("Add a minimal automated test script and CI check.");
+  }
+  if (hasTestScript && !hasCiWorkflow) {
+    nextBuilds.push("Add a pull-request CI workflow that runs `npm test` in apps/web.");
   }
   if (!gitignore || !lineExists(gitignore, "knowledge/")) {
     nextBuilds.push("Add `knowledge/` to `.gitignore` to keep local notes out of commits.");
@@ -280,22 +289,23 @@ async function inspectRepo(input: Record<string, unknown>, logToMemory: boolean)
   if (nextBuilds.length === 0) {
     nextBuilds.push("Run `agent.self_improve` with `dry_run=true` to generate the next safe PR.");
   }
+  const prioritizedNextBuilds = nextBuilds.slice(0, 3);
 
+  const missingText = gaps.length > 0 ? gaps.slice(0, 3).join(" ") : "No critical gaps detected.";
+  const nextText = prioritizedNextBuilds.join(" | ");
   const summary =
     mode === "self_improvement_readiness"
-      ? `FounderOS can inspect and open PRs in ${fullRepo}. Self-improvement readiness is ${
-          readiness.self_improvement ? "on" : "off"
-        }. Main gaps: ${gaps.slice(0, 2).join(" ") || "none detected."}`
-      : `FounderOS currently supports health, memory, GitHub read/write via PR, tool listing, and self-improvement orchestration in ${fullRepo}. Top gaps: ${
-          gaps.slice(0, 3).join(" ") || "none critical detected."
-        } Next best build: ${nextBuilds[0]}`;
+      ? `FounderOS is ${readiness.self_improvement ? "ready" : "not ready"} to self-improve in ${fullRepo}. Testing loop is ${
+          readiness.testing_loop ? "ready" : "not ready"
+        }. Deployment loop is ${readiness.deployment_loop ? "ready" : "not ready"}. Gaps: ${missingText} Next best builds: ${nextText}`
+      : `FounderOS can inspect repos, query/write memory, and open PR-based improvements in ${fullRepo}. Current gaps: ${missingText} Next best builds: ${nextText}`;
 
   const result = {
     ok: true,
     repo: fullRepo,
     capabilities,
     gaps,
-    next_builds: nextBuilds,
+    next_builds: prioritizedNextBuilds,
     readiness,
     summary,
     inspected_files: fileReads
