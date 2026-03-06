@@ -153,7 +153,16 @@ async function githubApi<T>(
   if (authMode === "app") {
     headers.set("Authorization", `Bearer ${createGitHubAppJwt()}`);
   } else {
-    headers.set("Authorization", `Bearer ${await getInstallationToken()}`);
+    try {
+      headers.set("Authorization", `Bearer ${await getInstallationToken()}`);
+    } catch (error) {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method !== "GET") {
+        throw error;
+      }
+      // Read-only fallback for public repositories when installation auth is unavailable.
+      headers.delete("Authorization");
+    }
   }
 
   const response = await fetch(`https://api.github.com${path}`, {
