@@ -83,24 +83,40 @@ components:
           items:
             $ref: '#/components/schemas/MemoryItem'
       required: [ok, items]
-    ToolExecuteRequest:
+    ToolName:
+      type: string
+      enum:
+        - health
+        - memory.write
+        - memory.query
+        - github.get_file
+        - github.list_tree
+        - github.create_pr
+        - tools.list
+        - agent.inspect_repo
+        - agent.self_improve
+    ToolExecuteRequestCamel:
       type: object
       properties:
         toolName:
-          type: string
-          enum:
-            - health
-            - memory.write
-            - memory.query
-            - github.get_file
-            - github.list_tree
-            - github.create_pr
-            - tools.list
-            - agent.self_improve
+          $ref: '#/components/schemas/ToolName'
         toolInput:
           type: object
           additionalProperties: true
-      required: [toolName, toolInput]
+      required: [toolName]
+    ToolExecuteRequestSnake:
+      type: object
+      properties:
+        tool_name:
+          $ref: '#/components/schemas/ToolName'
+        input:
+          type: object
+          additionalProperties: true
+      required: [tool_name]
+    ToolExecuteRequest:
+      oneOf:
+        - $ref: '#/components/schemas/ToolExecuteRequestCamel'
+        - $ref: '#/components/schemas/ToolExecuteRequestSnake'
     ToolExecuteResponse:
       type: object
       properties:
