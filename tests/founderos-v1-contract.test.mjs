@@ -76,6 +76,8 @@ test("capabilities requires auth and returns only the four active endpoints", as
   const unauthorized = await invoke(capabilitiesHandler, { method: "GET", headers: {} });
   assert.equal(unauthorized.statusCode, 401);
   assert.equal(unauthorized.json.error, "unauthorized");
+  assert.equal(unauthorized.json.auth_received_via, "none");
+  assert.equal(unauthorized.json.expected_key_configured, false);
 
   process.env.FOUNDEROS_WRITE_KEY = "test-key";
   process.env.ALLOWED_REPOS = "owner/repo";
@@ -109,6 +111,20 @@ test("capabilities also accepts bearer auth for GPT compatibility", async () => 
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.ok, true);
+});
+
+test("capabilities reports auth transport on unauthorized requests", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+
+  const response = await invoke(capabilitiesHandler, {
+    method: "GET",
+    headers: { authorization: "Bearer wrong-key" },
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json.error, "unauthorized");
+  assert.equal(response.json.auth_received_via, "authorization-bearer");
+  assert.equal(response.json.expected_key_configured, true);
 });
 
 test("precommit plan stays proposal-only", async () => {

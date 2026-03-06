@@ -113,13 +113,34 @@ function extractApiKey(req) {
   return authorization;
 }
 
+function detectAuthTransport(req) {
+  const headers = req && req.headers ? req.headers : {};
+  const direct = typeof headers[AUTH_HEADER] === "string" ? headers[AUTH_HEADER].trim() : "";
+  if (direct) {
+    return "x-founderos-key";
+  }
+
+  const authorization =
+    typeof headers.authorization === "string" ? headers.authorization.trim() : "";
+  if (!authorization) {
+    return "none";
+  }
+
+  return /^Bearer\s+.+$/i.test(authorization) ? "authorization-bearer" : "authorization";
+}
+
 function requireApiKey(req, res) {
   const provided = extractApiKey(req);
   if (provided && provided === process.env.FOUNDEROS_WRITE_KEY) {
     return true;
   }
 
-  sendJson(res, 401, { ok: false, error: "unauthorized" });
+  sendJson(res, 401, {
+    ok: false,
+    error: "unauthorized",
+    auth_received_via: detectAuthTransport(req),
+    expected_key_configured: Boolean(process.env.FOUNDEROS_WRITE_KEY),
+  });
   return false;
 }
 
@@ -296,6 +317,7 @@ module.exports = {
   VERSION,
   buildCapabilitiesResponse,
   buildPlanArtifact,
+  detectAuthTransport,
   extractApiKey,
   getAllowedRepos,
   hashJson,
