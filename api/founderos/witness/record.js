@@ -48,6 +48,8 @@ async function readBodyFromStream(req) {
 }
 
 module.exports = async (req, res) => {
+  console.log("HEADERS:", JSON.stringify(req.headers));
+
   try {
     if (req.method !== "POST") {
       return sendJson(
