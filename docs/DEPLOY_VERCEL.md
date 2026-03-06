@@ -39,3 +39,7 @@ Apply [`infra/supabase/witness_events.sql`](/Users/andysalvo_1/Documents/GitHub/
    - `GET https://YOUR-DOMAIN/api/founderos/health`
    - `GET https://YOUR-DOMAIN/api/founderos/capabilities` with `x-founderos-key`
 5. Keep the canonical schema at [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml) synchronized with the deployed code. The contract test covers this locally and in CI.
+
+GPT Builder reachability note:
+- Use a public production domain for GPT Actions.
+- Do not use a Vercel preview or deployment URL if it is protected by Vercel Authentication or other Deployment Protection, because GPT Actions will receive the Vercel login page instead of your JSON API.

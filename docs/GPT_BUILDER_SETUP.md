@@ -3,9 +3,9 @@
 ## What to import
 
 Use the canonical schema at [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml).
-It already points at the currently working deployment:
+It should point at a public production domain that GPT Actions can reach:
 
-- `https://founderos-5hj8l08i5-andysalvos-projects.vercel.app`
+- `https://founderos-alpha.vercel.app`
 
 ## GPT Builder steps
 
@@ -31,3 +31,4 @@ Use the text in [`docs/GPT_INSTRUCTIONS.md`](/Users/andysalvo_1/Documents/GitHub
 - If `health` works but `capabilities` fails inside GPT Builder, delete and recreate the Action from the current schema.
 - Keep the canonical Builder auth config as `x-founderos-key`.
 - Founderos also tolerates `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` as a compatibility fallback for GPT action transport of the same secret.
+- Do not point GPT Builder at a Vercel preview or deployment URL that is behind Vercel Authentication. GPT Actions cannot complete that SSO flow and will fail with `ClientResponseError` before your handler runs.
