@@ -95,7 +95,7 @@ components:
         - tools.list
         - agent.inspect_repo
         - agent.self_improve
-    ToolExecuteRequestCamel:
+    ToolExecuteRequest:
       type: object
       properties:
         toolName:
@@ -103,20 +103,12 @@ components:
         toolInput:
           type: object
           additionalProperties: true
-      required: [toolName]
-    ToolExecuteRequestSnake:
-      type: object
-      properties:
         tool_name:
           $ref: '#/components/schemas/ToolName'
         input:
           type: object
           additionalProperties: true
-      required: [tool_name]
-    ToolExecuteRequest:
-      oneOf:
-        - $ref: '#/components/schemas/ToolExecuteRequestCamel'
-        - $ref: '#/components/schemas/ToolExecuteRequestSnake'
+      additionalProperties: false
     ToolExecuteResponse:
       type: object
       properties:
@@ -124,7 +116,7 @@ components:
           type: boolean
         error:
           type: string
-      required: [ok]
+      additionalProperties: true
 paths:
   /api/founderos/health:
     get:

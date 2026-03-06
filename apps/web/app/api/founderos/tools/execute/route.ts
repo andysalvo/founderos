@@ -59,40 +59,18 @@ function normalizeToolCall(raw: Record<string, unknown>): {
   toolInput: Record<string, unknown>;
   hasInput: boolean;
 } {
-  const toolNameCamel = raw.toolName;
-  const toolNameSnake = raw.tool_name;
-  if (toolNameCamel !== undefined && typeof toolNameCamel !== "string") {
-    throw new FounderosInputError("toolName must be a string");
-  }
-  if (toolNameSnake !== undefined && typeof toolNameSnake !== "string") {
-    throw new FounderosInputError("tool_name must be a string");
-  }
-
-  if (
-    typeof toolNameCamel === "string" &&
-    typeof toolNameSnake === "string" &&
-    toolNameCamel.trim() &&
-    toolNameSnake.trim() &&
-    toolNameCamel.trim() !== toolNameSnake.trim()
-  ) {
-    throw new FounderosInputError("toolName and tool_name must match when both provided");
-  }
-
   const toolNameRaw =
-    typeof toolNameCamel === "string" && toolNameCamel.trim()
-      ? toolNameCamel
-      : toolNameSnake;
+    raw.toolName !== undefined ? raw.toolName : raw.tool_name;
   if (typeof toolNameRaw !== "string" || toolNameRaw.trim().length === 0) {
-    throw new FounderosInputError("toolName or tool_name is required");
+    throw new FounderosInputError("toolName is required");
   }
 
-  const hasCamelInput = raw.toolInput !== undefined;
-  const hasSnakeInput = raw.input !== undefined;
-  if (hasCamelInput && hasSnakeInput) {
-    throw new FounderosInputError("provide only one of toolInput or input");
-  }
-
-  const inputRaw = hasCamelInput ? raw.toolInput : hasSnakeInput ? raw.input : {};
+  const inputRaw =
+    raw.toolInput !== undefined
+      ? raw.toolInput
+      : raw.input !== undefined
+        ? raw.input
+        : {};
   if (!isRecord(inputRaw)) {
     throw new FounderosInputError("toolInput/input must be a JSON object");
   }
@@ -100,7 +78,7 @@ function normalizeToolCall(raw: Record<string, unknown>): {
   return {
     toolName: toolNameRaw.trim(),
     toolInput: inputRaw,
-    hasInput: hasCamelInput || hasSnakeInput,
+    hasInput: raw.toolInput !== undefined || raw.input !== undefined,
   };
 }
 
