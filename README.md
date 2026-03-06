@@ -15,6 +15,7 @@ The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Docum
 ## Architecture
 
 - `precommit/plan` is proposal-only. It can summarize and shape intent, but it does not write files or call external systems.
+- `capabilities` is public and read-only so GPT sessions can inspect the active contract before authenticated calls begin.
 - `commit/execute` is the only durable-write path. It is mechanical, hash-bound, and requires explicit authorization.
 - Witness logging happens before GitHub writes begin. If witness recording is unavailable, execution fails closed.
 - GitHub App and Supabase credentials remain server-side.

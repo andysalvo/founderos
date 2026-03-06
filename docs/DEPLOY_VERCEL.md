@@ -38,7 +38,7 @@ Apply [`infra/supabase/witness_events.sql`](/Users/andysalvo_1/Documents/GitHub/
 3. Deploy the repo without enabling any extra framework preset. The root `api/` folder is the runtime surface.
 4. After deployment, verify:
    - `GET https://YOUR-DOMAIN/api/founderos/health`
-   - `GET https://YOUR-DOMAIN/api/founderos/capabilities` with `x-founderos-key`
+   - `GET https://YOUR-DOMAIN/api/founderos/capabilities`
    - `POST https://YOUR-DOMAIN/api/founderos/capabilities/check` with `x-founderos-key`
 5. Keep the canonical schema at [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml) synchronized with the deployed code. The contract test covers this locally and in CI.
 

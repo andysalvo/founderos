@@ -18,8 +18,8 @@ const ENDPOINTS = [
     operationId: "capabilities",
     method: "GET",
     path: "/api/founderos/capabilities",
-    auth: "apiKey",
-    purpose: "Describe the exact v1 contract and commitment boundary.",
+    auth: "public",
+    purpose: "Describe the exact v1 contract and commitment boundary without write access.",
   },
   {
     operationId: "capabilitiesCheck",

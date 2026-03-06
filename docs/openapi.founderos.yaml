@@ -359,8 +359,7 @@ paths:
     get:
       operationId: capabilities
       summary: Describe the exact v1 control-plane contract
-      security:
-        - FounderosApiKey: []
+      security: []
       responses:
         "200":
           description: Capabilities returned
@@ -368,12 +367,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CapabilitiesResponse"
-        "401":
-          description: Missing or invalid API key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "405":
           description: Method not allowed
           content:
