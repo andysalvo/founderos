@@ -247,6 +247,85 @@ components:
           $ref: "#/components/schemas/PlanArtifact"
       required: [ok, artifact]
       additionalProperties: false
+    RepoFileRequest:
+      type: object
+      properties:
+        repo:
+          type: string
+        path:
+          type: string
+        ref:
+          type: string
+      required: [repo, path]
+      additionalProperties: false
+    RepoFileResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        repo:
+          type: string
+        path:
+          type: string
+        ref:
+          type: string
+        sha:
+          type: string
+        size:
+          type: integer
+        content:
+          type:
+            - string
+            - "null"
+      required: [ok, repo, path, ref, sha, size, content]
+      additionalProperties: false
+    RepoTreeRequest:
+      type: object
+      properties:
+        repo:
+          type: string
+        ref:
+          type: string
+        path_prefix:
+          type: string
+        limit:
+          type: integer
+      required: [repo]
+      additionalProperties: false
+    RepoTreeFile:
+      type: object
+      properties:
+        path:
+          type: string
+        sha:
+          type: string
+        size:
+          type: integer
+        mode:
+          type: string
+      required: [path, sha, size, mode]
+      additionalProperties: false
+    RepoTreeResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        repo:
+          type: string
+        ref:
+          type: string
+        path_prefix:
+          type: string
+        truncated:
+          type: boolean
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/RepoTreeFile"
+      required: [ok, repo, ref, truncated, files]
+      additionalProperties: false
     WriteFile:
       type: object
       properties:
@@ -442,6 +521,104 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "405":
           description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/repo/file:
+    post:
+      operationId: repoFile
+      summary: Read one file from an allowlisted GitHub repo
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepoFileRequest"
+      responses:
+        "200":
+          description: File content returned from the live GitHub repo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoFileResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Repo rejected by server policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing GitHub configuration or GitHub read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/repo/tree:
+    post:
+      operationId: repoTree
+      summary: List files from an allowlisted GitHub repo
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepoTreeRequest"
+      responses:
+        "200":
+          description: File list returned from the live GitHub repo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoTreeResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Repo rejected by server policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing GitHub configuration or GitHub read failed
           content:
             application/json:
               schema:

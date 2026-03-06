@@ -36,6 +36,20 @@ const ENDPOINTS = [
     purpose: "Return a proposal artifact only. No durable writes or external side effects.",
   },
   {
+    operationId: "repoFile",
+    method: "POST",
+    path: "/api/founderos/repo/file",
+    auth: "apiKey",
+    purpose: "Read one file from an allowlisted GitHub repo via server-side GitHub App auth.",
+  },
+  {
+    operationId: "repoTree",
+    method: "POST",
+    path: "/api/founderos/repo/tree",
+    auth: "apiKey",
+    purpose: "List files from an allowlisted GitHub repo via server-side GitHub App auth.",
+  },
+  {
     operationId: "commitExecute",
     method: "POST",
     path: "/api/founderos/commit/execute",

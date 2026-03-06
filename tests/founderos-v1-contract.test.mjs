@@ -10,6 +10,8 @@ const healthHandler = require("../api/founderos/health.js");
 const capabilitiesHandler = require("../api/founderos/capabilities.js");
 const capabilitiesCheckHandler = require("../api/founderos/capabilities/check.js");
 const precommitPlanHandler = require("../api/founderos/precommit/plan.js");
+const repoFileHandler = require("../api/founderos/repo/file.js");
+const repoTreeHandler = require("../api/founderos/repo/tree.js");
 const commitExecuteHandler = require("../api/founderos/commit/execute.js");
 
 function createMockResponse() {
@@ -54,6 +56,8 @@ test("OpenAPI surface is exactly the minimal v1 contract", async () => {
     "/api/founderos/capabilities:",
     "/api/founderos/capabilities/check:",
     "/api/founderos/precommit/plan:",
+    "/api/founderos/repo/file:",
+    "/api/founderos/repo/tree:",
     "/api/founderos/commit/execute:",
   ]) {
     assert.match(openapi, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -78,13 +82,13 @@ test("health handler matches the documented shape", async () => {
   assert.equal(response.json.ok, true);
 });
 
-test("capabilities is public and returns only the five active endpoints", async () => {
+test("capabilities is public and returns only the seven active endpoints", async () => {
   process.env.ALLOWED_REPOS = "owner/repo";
 
   const response = await invoke(capabilitiesHandler, { method: "GET", headers: {} });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.endpoints.length, 5);
+  assert.equal(response.json.endpoints.length, 7);
   assert.equal(response.json.openapi.path, "docs/openapi.founderos.yaml");
   assert.deepEqual(
     response.json.endpoints.map((item) => item.path),
@@ -93,6 +97,8 @@ test("capabilities is public and returns only the five active endpoints", async 
       "/api/founderos/capabilities",
       "/api/founderos/capabilities/check",
       "/api/founderos/precommit/plan",
+      "/api/founderos/repo/file",
+      "/api/founderos/repo/tree",
       "/api/founderos/commit/execute",
     ]
   );
@@ -131,8 +137,42 @@ test("capabilities check mirrors capabilities over POST", async () => {
 
   assert.equal(authorized.statusCode, 200);
   assert.equal(authorized.json.ok, true);
-  assert.equal(authorized.json.endpoints.length, 5);
+  assert.equal(authorized.json.endpoints.length, 7);
   assert.equal(authorized.json.endpoints[2].path, "/api/founderos/capabilities/check");
+});
+
+test("repo.file rejects repos outside the allowlist before external calls", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+
+  const response = await invoke(repoFileHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      repo: "other/repo",
+      path: "README.md",
+    },
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json.error, "repo_not_allowed");
+});
+
+test("repo.tree validates limit input before external calls", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+
+  const response = await invoke(repoTreeHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      repo: "owner/repo",
+      limit: "abc",
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "limit_invalid");
 });
 
 test("precommit plan stays proposal-only", async () => {
