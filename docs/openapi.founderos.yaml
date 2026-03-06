@@ -88,7 +88,13 @@ components:
       properties:
         tool_name:
           type: string
-          enum: [health, memory.write, memory.query]
+          enum:
+            - health
+            - memory.write
+            - memory.query
+            - github.get_file
+            - github.list_tree
+            - github.create_pr
         input:
           type: object
           additionalProperties: true

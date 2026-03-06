@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import {
+  githubCreatePr,
+  githubGetFile,
+  githubListTree,
+} from "@/lib/github-tools";
+import {
   FounderosInputError,
   appendToolLog,
   isAuthorizedRequest,
@@ -61,6 +66,24 @@ export async function POST(request: Request) {
       const memoryInput = parseMemoryQueryInput(toolInput);
       const items = await queryMemory(memoryInput);
       toolOutput = { ok: true, items };
+      toolStatus = "ok";
+      return NextResponse.json(toolOutput);
+    }
+
+    if (toolName === "github.get_file") {
+      toolOutput = await githubGetFile(toolInput);
+      toolStatus = "ok";
+      return NextResponse.json(toolOutput);
+    }
+
+    if (toolName === "github.list_tree") {
+      toolOutput = await githubListTree(toolInput);
+      toolStatus = "ok";
+      return NextResponse.json(toolOutput);
+    }
+
+    if (toolName === "github.create_pr") {
+      toolOutput = await githubCreatePr(toolInput);
       toolStatus = "ok";
       return NextResponse.json(toolOutput);
     }
