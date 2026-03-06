@@ -88,9 +88,37 @@ function toBase64Url(input: string): string {
   return Buffer.from(input).toString("base64url");
 }
 
+function normalizePrivateKey(raw: string): string {
+  let key = raw.trim();
+
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1);
+  }
+
+  if (key.includes("\\n")) {
+    key = key.replace(/\\n/g, "\n");
+  }
+
+  if (!key.includes("BEGIN") && /^[A-Za-z0-9+/=\n\r]+$/.test(key)) {
+    try {
+      const decoded = Buffer.from(key, "base64").toString("utf8");
+      if (decoded.includes("BEGIN")) {
+        key = decoded;
+      }
+    } catch {
+      // Ignore decoding errors and let signer surface format issues.
+    }
+  }
+
+  return key;
+}
+
 function createGitHubAppJwt(): string {
   const appId = requiredEnv("GITHUB_APP_ID");
-  const privateKey = requiredEnv("GITHUB_APP_PRIVATE_KEY").replace(/\\n/g, "\n");
+  const privateKey = normalizePrivateKey(requiredEnv("GITHUB_APP_PRIVATE_KEY"));
 
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
