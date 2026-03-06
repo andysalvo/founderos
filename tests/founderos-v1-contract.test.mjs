@@ -43,6 +43,10 @@ test("OpenAPI surface is exactly the minimal v1 contract", async () => {
     openapi,
     /https:\/\/founderos-alpha\.vercel\.app/
   );
+  assert.match(
+    openapi,
+    /servers:\s*\n\s*- url: https:\/\/founderos-alpha\.vercel\.app\s*\nsecurity:\s*\n\s*- FounderosApiKey: \[\]/
+  );
 
   for (const path of [
     "/api/founderos/health:",

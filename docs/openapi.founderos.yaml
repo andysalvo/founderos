@@ -5,6 +5,8 @@ info:
   description: Minimal APS-aligned control plane for a Custom GPT action backend on Vercel.
 servers:
   - url: https://founderos-alpha.vercel.app
+security:
+  - FounderosApiKey: []
 components:
   securitySchemes:
     FounderosApiKey:
