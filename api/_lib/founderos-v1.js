@@ -92,8 +92,29 @@ function requireMethod(req, res, method) {
   return false;
 }
 
+function extractApiKey(req) {
+  const headers = req && req.headers ? req.headers : {};
+  const direct = typeof headers[AUTH_HEADER] === "string" ? headers[AUTH_HEADER].trim() : "";
+  if (direct) {
+    return direct;
+  }
+
+  const authorization =
+    typeof headers.authorization === "string" ? headers.authorization.trim() : "";
+  if (!authorization) {
+    return "";
+  }
+
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  if (bearerMatch && bearerMatch[1]) {
+    return bearerMatch[1].trim();
+  }
+
+  return authorization;
+}
+
 function requireApiKey(req, res) {
-  const provided = req.headers && req.headers[AUTH_HEADER];
+  const provided = extractApiKey(req);
   if (provided && provided === process.env.FOUNDEROS_WRITE_KEY) {
     return true;
   }
@@ -275,6 +296,7 @@ module.exports = {
   VERSION,
   buildCapabilitiesResponse,
   buildPlanArtifact,
+  extractApiKey,
   getAllowedRepos,
   hashJson,
   isPlainObject,

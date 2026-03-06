@@ -39,6 +39,11 @@ async function invoke(handler, req) {
 test("OpenAPI surface is exactly the minimal v1 contract", async () => {
   const openapi = await readFile(new URL("../docs/openapi.founderos.yaml", import.meta.url), "utf8");
 
+  assert.match(
+    openapi,
+    /https:\/\/founderos-5hj8l08i5-andysalvos-projects\.vercel\.app/
+  );
+
   for (const path of [
     "/api/founderos/health:",
     "/api/founderos/capabilities:",
@@ -92,6 +97,18 @@ test("capabilities requires auth and returns only the four active endpoints", as
       "/api/founderos/commit/execute",
     ]
   );
+});
+
+test("capabilities also accepts bearer auth for GPT compatibility", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+
+  const response = await invoke(capabilitiesHandler, {
+    method: "GET",
+    headers: { authorization: "Bearer test-key" },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.ok, true);
 });
 
 test("precommit plan stays proposal-only", async () => {

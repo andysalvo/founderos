@@ -2,7 +2,7 @@
 
 ## Protected boundaries
 
-- Auth boundary: authenticated routes require `x-founderos-key` and server-side secret validation.
+- Auth boundary: authenticated routes require the Founderos write key with server-side secret validation. The canonical header is `x-founderos-key`; `Authorization: Bearer <key>` is tolerated only as a compatibility fallback for the same secret.
 - Protected path policy: `commit.execute` rejects writes to `api/founderos/**`, `docs/openapi.founderos.yaml`, `.env*`, `.github/workflows/**`, and `vercel.json`.
 - Witness invariant: `commit.execute` fails closed unless it can append a witness record before GitHub writes begin.
 - Explicit authorization: `commit.execute` requires an authorization object and rejects any write set whose hash does not match the authorized hash.
