@@ -213,26 +213,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MemoryQueryResponse'
-  /api/founderos/tools/execute:
-    post:
-      operationId: toolsExecute
-      summary: Execute enabled FounderOS tool
-      security:
-        - FounderosApiKey: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ToolExecuteRequest'
-      responses:
-        '200':
-          description: Tool execution response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ToolExecuteResponse'
-  /api/founderos/agent/inspect:
+  /founderos/agent/inspect:
     post:
       operationId: agentInspect
       summary: Inspect repository status through the tools gateway
@@ -251,7 +232,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenericToolResponse'
-  /api/founderos/agent/improve:
+  /founderos/agent/improve:
     post:
       operationId: agentImprove
       summary: Run self-improvement flow through the tools gateway
