@@ -59,43 +59,135 @@ const claim = JSON.parse(process.env.JOB_JSON || "{}");
 const job = claim.job || {};
 const tree = JSON.parse(process.env.FOUNDEROS_TREE_JSON || "{}");
 const readme = JSON.parse(process.env.FOUNDEROS_README_JSON || "{}");
+const activationDoc = JSON.parse(process.env.FOUNDEROS_ACTIVATION_DOC_JSON || "{}");
 
 const files = Array.isArray(tree.files) ? tree.files : [];
 const topPaths = files.slice(0, 20).map((file) => file.path);
 const readmeText = typeof readme.content === "string" ? readme.content : "";
 const readmeLines = readmeText.split(/\r?\n/).slice(0, 12);
+const activationText = typeof activationDoc.content === "string" ? activationDoc.content : "";
+const activationLines = activationText.split(/\r?\n/).slice(0, 18);
 const activeSurface = files
   .filter((file) => /^api\/founderos\//.test(file.path))
   .map((file) => file.path)
   .sort();
 const repo = job.repo || (job.scope_json && job.scope_json.repo) || null;
-const candidateFiles = [
-  "services/openclaw/worker-loop.sh",
-  "services/openclaw/aps-client.sh",
-  "docs/FOUNDEROS_LIVE_STATE.md",
-  "README.md",
-];
-const candidateWriteSet = {
-  mode: "proposal_only",
-  repo,
-  branch_name: "codex/safe-improvement-proposal",
-  base_branch: "main",
-  title: "Improve autonomous proposal generation for Founderos worker",
-  rationale:
-    "The worker can inspect and describe the system, but it should next emit one bounded improvement proposal with enough structure to translate into a PR-ready write set.",
-  files: candidateFiles.map((path) => ({
-    path,
-    action: "update",
-    intent:
-      path === "services/openclaw/worker-loop.sh"
-        ? "Generate a concrete safe improvement proposal from inspection results."
-        : path === "services/openclaw/aps-client.sh"
-          ? "Support any additional worker-side orchestration calls needed by proposal generation."
-          : path === "docs/FOUNDEROS_LIVE_STATE.md"
-            ? "Keep the live-state document aligned with the richer autonomous behavior."
-            : "Keep top-level system documentation aligned with the new worker capability.",
-  })),
-};
+const activationDocNeedsWorkerUpdate =
+  !activationText.includes("FOUNDEROS_WORKER_KEY") ||
+  !activationText.includes("claim") ||
+  !activationText.includes("heartbeat");
+
+const improvementProposal = activationDocNeedsWorkerUpdate
+  ? {
+      kind: "docs_alignment",
+      title: "Update OpenClaw activation docs for the live async worker loop",
+      priority: "high",
+      rationale:
+        "The current activation doc still describes the older one-key flow and does not document the live worker-authenticated async orchestration path.",
+      risk_level: "low",
+      target_area: "operator-facing activation and recovery documentation",
+      target_files: [
+        "docs/OPENCLAW_APS_ACTIVATION.md",
+        "docs/FOUNDEROS_LIVE_STATE.md",
+        "README.md",
+      ],
+      proposed_changes: [
+        "Document FOUNDEROS_WORKER_KEY alongside FOUNDEROS_WRITE_KEY in the VM activation path.",
+        "Add the worker claim, heartbeat, complete, and fail loop to the activation and verification docs.",
+        "Align top-level docs with the fact that the live system now has a public async lane and a private worker lane.",
+      ],
+      acceptance_criteria: [
+        "Activation docs describe both public APS auth and worker-only auth correctly.",
+        "Operator can follow the documented steps to restart the worker loop and verify one async job.",
+        "Top-level docs remain consistent with the actual live runtime and boundaries.",
+      ],
+      expected_outcome:
+        "The repo documents the live async worker path accurately, reducing recovery risk and making the system easier for the agent to reason about.",
+      candidate_write_set: {
+        mode: "proposal_only",
+        repo,
+        branch_name: "codex/update-worker-activation-docs",
+        base_branch: "main",
+        title: "Document async worker activation for Founderos",
+        rationale:
+          "The live system now uses separate public and worker auth lanes, so the activation docs should reflect the actual operating model.",
+        files: [
+          {
+            path: "docs/OPENCLAW_APS_ACTIVATION.md",
+            action: "update",
+            intent: "Describe the two-key APS + worker activation path and verification loop.",
+          },
+          {
+            path: "docs/FOUNDEROS_LIVE_STATE.md",
+            action: "update",
+            intent: "Reflect that activation docs now cover the live async worker loop.",
+          },
+          {
+            path: "README.md",
+            action: "update",
+            intent: "Point operators at the updated activation guidance.",
+          },
+        ],
+      },
+    }
+  : {
+      kind: "safe_improvement_proposal",
+      title: "Upgrade the worker from inspect-and-report to inspect-and-propose",
+      priority: "high",
+      rationale:
+        "The system can inspect and report on itself, but it still lacks autonomous write-set generation for PR-based self-improvement.",
+      risk_level: "low",
+      target_area: "services/openclaw, result shaping, and operator-facing docs",
+      target_files: [
+        "services/openclaw/worker-loop.sh",
+        "services/openclaw/aps-client.sh",
+        "docs/FOUNDEROS_LIVE_STATE.md",
+        "README.md",
+      ],
+      proposed_changes: [
+        "Generate a concrete safe improvement proposal from worker inspection output.",
+        "Return rationale, target files, acceptance criteria, and a candidate write-set scaffold in the job result.",
+        "Keep the live-state and README docs aligned with the improved worker behavior.",
+      ],
+      acceptance_criteria: [
+        "Completed jobs include a bounded improvement proposal with explicit target files.",
+        "Proposal output remains within the existing PR-only guarded execution model.",
+        "Documentation reflects the richer autonomous worker behavior without overstating capabilities.",
+      ],
+      expected_outcome:
+        "Return a concrete safe improvement proposal that can later be translated into a PR-ready exact write set.",
+      candidate_write_set: {
+        mode: "proposal_only",
+        repo,
+        branch_name: "codex/safe-improvement-proposal",
+        base_branch: "main",
+        title: "Improve autonomous proposal generation for Founderos worker",
+        rationale:
+          "The worker can inspect and describe the system, but it should next emit one bounded improvement proposal with enough structure to translate into a PR-ready write set.",
+        files: [
+          {
+            path: "services/openclaw/worker-loop.sh",
+            action: "update",
+            intent: "Generate a concrete safe improvement proposal from inspection results.",
+          },
+          {
+            path: "services/openclaw/aps-client.sh",
+            action: "update",
+            intent: "Support any additional worker-side orchestration calls needed by proposal generation.",
+          },
+          {
+            path: "docs/FOUNDEROS_LIVE_STATE.md",
+            action: "update",
+            intent: "Keep the live-state document aligned with the richer autonomous behavior.",
+          },
+          {
+            path: "README.md",
+            action: "update",
+            intent: "Keep top-level system documentation aligned with the new worker capability.",
+          },
+        ],
+      },
+    };
 const selfState = {
   identity: {
     name: "Founderos",
@@ -131,30 +223,9 @@ const result = {
     recommended_next_action:
       "Review the bounded safe improvement proposal and promote it into a PR-ready exact write set.",
     readme_excerpt: readmeLines,
+    activation_doc_excerpt: activationLines,
     self_state: selfState,
-    suggested_next_improvement: {
-      kind: "safe_improvement_proposal",
-      priority: "high",
-      title: "Upgrade the worker from inspect-and-report to inspect-and-propose",
-      rationale:
-        "The system can inspect and report on itself, but it still lacks autonomous write-set generation for PR-based self-improvement.",
-      risk_level: "low",
-      target_area: "services/openclaw, result shaping, and operator-facing docs",
-      target_files: candidateFiles,
-      proposed_changes: [
-        "Generate a concrete safe improvement proposal from worker inspection output.",
-        "Return rationale, target files, acceptance criteria, and a candidate write-set scaffold in the job result.",
-        "Keep the live-state and README docs aligned with the improved worker behavior.",
-      ],
-      acceptance_criteria: [
-        "Completed jobs include a bounded improvement proposal with explicit target files.",
-        "Proposal output remains within the existing PR-only guarded execution model.",
-        "Documentation reflects the richer autonomous worker behavior without overstating capabilities.",
-      ],
-      expected_outcome:
-        "Return a concrete safe improvement proposal that can later be translated into a PR-ready exact write set.",
-      candidate_write_set: candidateWriteSet,
-    },
+    suggested_next_improvement: improvementProposal,
   },
 };
 
@@ -164,7 +235,7 @@ fs.writeFileSync(targetPath, JSON.stringify(result));
 
 inspect_job() {
   local claimed_json="$1"
-  local job_id repo branch tree_json readme_json payload_file
+  local job_id repo branch tree_json readme_json activation_doc_json payload_file
 
   job_id="$(printf '%s' "${claimed_json}" | json_field 'data.job.id')"
   repo="$(printf '%s' "${claimed_json}" | json_field 'data.job.repo || ""')"
@@ -185,9 +256,16 @@ inspect_job() {
     readme_json='{"ok":false,"content":null}'
   fi
 
+  if activation_doc_json="$("${CLIENT}" repo-file "${repo}" "docs/OPENCLAW_APS_ACTIVATION.md" "${branch}" 2>/dev/null)"; then
+    :
+  else
+    activation_doc_json='{"ok":false,"content":null}'
+  fi
+
   payload_file="$(mktemp)"
   FOUNDEROS_TREE_JSON="${tree_json}" \
   FOUNDEROS_README_JSON="${readme_json}" \
+  FOUNDEROS_ACTIVATION_DOC_JSON="${activation_doc_json}" \
   build_result_payload "${claimed_json}" "${payload_file}"
 
   post_status "${job_id}" "write_set_ready" "Inspection summary prepared" 0.9
