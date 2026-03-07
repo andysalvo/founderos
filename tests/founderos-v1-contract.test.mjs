@@ -93,6 +93,86 @@ function loadFreshCommonJs(modulePath, mocks = {}) {
   }
 }
 
+test("worker freshness helpers detect live worker-auth markers", async () => {
+  const source = await readFile(
+    new URL("../services/openclaw/worker-loop.sh", import.meta.url),
+    "utf8"
+  );
+  const { hasLiveWorkerAuthMarkers } = extractWorkerFreshnessHelpers(source);
+
+  assert.equal(
+    hasLiveWorkerAuthMarkers(
+      "FOUNDEROS_WORKER_KEY\nclaim\nheartbeat"
+    ),
+    true
+  );
+  assert.equal(
+    hasLiveWorkerAuthMarkers(
+      "FOUNDEROS_WORKER_KEY\nclaim"
+    ),
+    false
+  );
+});
+
+test("worker recommends freshness track when activation markers are already present", async () => {
+  const source = await readFile(
+    new URL("../services/openclaw/worker-loop.sh", import.meta.url),
+    "utf8"
+  );
+  const { buildImprovementProposal } = extractWorkerFreshnessHelpers(source);
+
+  const proposal = buildImprovementProposal({
+    repo: "andysalvo/founderos",
+    activationText:
+      "FOUNDEROS_WORKER_KEY\nclaim\nheartbeat\ncomplete\nfail",
+    desiredActivationDoc: "placeholder",
+  });
+
+  assert.equal(proposal.kind, "safe_improvement_proposal");
+  assert.equal(
+    proposal.title,
+    "Tighten worker recommendation freshness and add regression coverage"
+  );
+  assert.deepEqual(proposal.target_files, [
+    "services/openclaw/worker-loop.sh",
+    "tests/founderos-v1-contract.test.mjs",
+  ]);
+  assert.equal(
+    proposal.candidate_write_set.branch_name,
+    "codex/worker-recommendation-freshness"
+  );
+});
+
+test("worker falls back to docs alignment when activation markers are absent", async () => {
+  const source = await readFile(
+    new URL("../services/openclaw/worker-loop.sh", import.meta.url),
+    "utf8"
+  );
+  const { buildImprovementProposal } = extractWorkerFreshnessHelpers(source);
+
+  const proposal = buildImprovementProposal({
+    repo: "andysalvo/founderos",
+    activationText:
+      "FOUNDEROS_PUBLIC_WRITE_KEY\nsubmit\njob-status",
+    desiredActivationDoc: "updated activation doc",
+  });
+
+  assert.equal(proposal.kind, "docs_alignment");
+  assert.equal(
+    proposal.title,
+    "Update OpenClaw activation docs for the live async worker loop"
+  );
+  assert.deepEqual(proposal.target_files, [
+    "docs/OPENCLAW_APS_ACTIVATION.md",
+    "docs/FOUNDEROS_LIVE_STATE.md",
+    "README.md",
+  ]);
+  assert.equal(
+    proposal.candidate_write_set.branch_name,
+    "codex/update-worker-activation-docs"
+  );
+});
+
 test("OpenAPI surface exposes only the public APS contract", async () => {
   const openapi = await readFile(new URL("../docs/openapi.founderos.yaml", import.meta.url), "utf8");
 
