@@ -195,7 +195,7 @@ const desiredActivationDoc = [
   "4. Approve the resulting PR through GitHub when the change is acceptable.",
   "",
   "That is the current safe path from chat intent to bounded self-improvement.",
-].join(\"\\n\");
+].join("\n");
 
 const improvementProposal = activationDocNeedsWorkerUpdate
   ? {
