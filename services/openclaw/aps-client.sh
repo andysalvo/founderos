@@ -3,6 +3,8 @@ set -euo pipefail
 
 BASE_URL="${FOUNDEROS_BASE_URL:-}"
 WRITE_KEY="${FOUNDEROS_WRITE_KEY:-}"
+WORKER_KEY="${FOUNDEROS_WORKER_KEY:-}"
+WORKER_ID="${FOUNDEROS_WORKER_ID:-openclaw-worker}"
 
 if [[ -z "${BASE_URL}" ]]; then
   echo "FOUNDEROS_BASE_URL is required" >&2
@@ -15,7 +17,7 @@ if [[ -z "${WRITE_KEY}" ]]; then
 fi
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <capabilities|plan|repo-file|repo-tree|execute> [args...]" >&2
+  echo "usage: $0 <capabilities|plan|repo-file|repo-tree|execute|submit|job-status|claim|heartbeat|complete|fail> [args...]" >&2
   exit 1
 fi
 
@@ -23,6 +25,7 @@ cmd="$1"
 shift || true
 
 auth_header=(-H "x-founderos-key: ${WRITE_KEY}" -H "content-type: application/json")
+worker_auth_header=(-H "x-founderos-worker-key: ${WORKER_KEY}" -H "x-founderos-worker-id: ${WORKER_ID}" -H "content-type: application/json")
 
 case "${cmd}" in
   capabilities)
@@ -79,6 +82,100 @@ case "${cmd}" in
     curl -sS "${auth_header[@]}" \
       --data @"${payload_file}" \
       "${BASE_URL}/api/founderos/commit/execute"
+    ;;
+  submit)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 submit \"user request\" [repo] [branch] [requested_by]" >&2
+      exit 1
+    fi
+    request="$1"
+    repo="${2:-}"
+    branch="${3:-main}"
+    requested_by="${4:-openclaw}"
+    request_json="$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "${request}")"
+    repo_json="$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "${repo}")"
+    branch_json="$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "${branch}")"
+    requested_by_json="$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "${requested_by}")"
+    curl -sS "${auth_header[@]}" \
+      -d "{\"user_request\":${request_json},\"scope\":{\"repo\":${repo_json},\"branch\":${branch_json}},\"requested_by\":${requested_by_json}}" \
+      "${BASE_URL}/api/founderos/orchestrate/submit"
+    ;;
+  job-status)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 job-status <job_id>" >&2
+      exit 1
+    fi
+    job_id="$1"
+    curl -sS -H "x-founderos-key: ${WRITE_KEY}" \
+      "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}"
+    ;;
+  claim)
+    if [[ -z "${WORKER_KEY}" ]]; then
+      echo "FOUNDEROS_WORKER_KEY is required" >&2
+      exit 1
+    fi
+    curl -sS "${worker_auth_header[@]}" \
+      -d '{}' \
+      "${BASE_URL}/api/founderos/orchestrate/claim"
+    ;;
+  heartbeat)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 heartbeat <job_id> [status] [message] [progress]" >&2
+      exit 1
+    fi
+    if [[ -z "${WORKER_KEY}" ]]; then
+      echo "FOUNDEROS_WORKER_KEY is required" >&2
+      exit 1
+    fi
+    job_id="$1"
+    status="${2:-claimed}"
+    message="${3:-}"
+    progress="${4:-null}"
+    status_json="$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "${status}")"
+    message_json="$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "${message}")"
+    curl -sS "${worker_auth_header[@]}" \
+      -d "{\"status\":${status_json},\"message\":${message_json},\"progress\":${progress}}" \
+      "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}/heartbeat"
+    ;;
+  complete)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 complete <job_id> [result-json-file]" >&2
+      exit 1
+    fi
+    if [[ -z "${WORKER_KEY}" ]]; then
+      echo "FOUNDEROS_WORKER_KEY is required" >&2
+      exit 1
+    fi
+    job_id="$1"
+    result_file="${2:-}"
+    if [[ -n "${result_file}" ]]; then
+      payload="$(cat "${result_file}")"
+    else
+      payload='{}'
+    fi
+    curl -sS "${worker_auth_header[@]}" \
+      --data "${payload}" \
+      "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}/complete"
+    ;;
+  fail)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 fail <job_id> [result-json-file]" >&2
+      exit 1
+    fi
+    if [[ -z "${WORKER_KEY}" ]]; then
+      echo "FOUNDEROS_WORKER_KEY is required" >&2
+      exit 1
+    fi
+    job_id="$1"
+    result_file="${2:-}"
+    if [[ -n "${result_file}" ]]; then
+      payload="$(cat "${result_file}")"
+    else
+      payload='{}'
+    fi
+    curl -sS "${worker_auth_header[@]}" \
+      --data "${payload}" \
+      "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}/fail"
     ;;
   *)
     echo "unknown command: ${cmd}" >&2
