@@ -1,0 +1,57 @@
+{
+  "project": "openclaw-outputs-ledger",
+  "version": 1,
+  "source_of_truth": "supabase_orchestration_and_witness_ledger",
+  "entries": [
+    {
+      "job_id": "572b8543-d1fb-4f3f-aaec-a03d196cfb75",
+      "focus": "business_readiness",
+      "status": "completed",
+      "completed_at": "2026-03-07T22:40:48.862Z",
+      "worker_id": "openclaw-vm",
+      "worker_commit_sha": "e77d89cc15beaf3e0d67252ef85c9aab134695c2",
+      "summary": "Proposed tightening worker recommendation freshness and adding regression coverage.",
+      "path": "jobs/572b8543-d1fb-4f3f-aaec-a03d196cfb75.md"
+    },
+    {
+      "job_id": "587d7674-9fce-4b78-a47c-0394404d9677",
+      "focus": "operations_reliability",
+      "status": "completed",
+      "completed_at": "2026-03-07T22:43:43.856Z",
+      "worker_id": "openclaw-vm",
+      "worker_commit_sha": "e77d89cc15beaf3e0d67252ef85c9aab134695c2",
+      "summary": "Proposed upgrading the worker from inspect-and-report to inspect-and-propose.",
+      "path": "jobs/587d7674-9fce-4b78-a47c-0394404d9677.md"
+    },
+    {
+      "job_id": "6fd3380c-3edd-4c23-92ee-49e458d08551",
+      "focus": "business_organization",
+      "status": "completed",
+      "completed_at": "2026-03-07T22:43:49.260Z",
+      "worker_id": "openclaw-vm",
+      "worker_commit_sha": "e77d89cc15beaf3e0d67252ef85c9aab134695c2",
+      "summary": "Proposed upgrading the worker from inspect-and-report to inspect-and-propose for business workflow use.",
+      "path": "jobs/6fd3380c-3edd-4c23-92ee-49e458d08551.md"
+    },
+    {
+      "job_id": "26074dad-ae7b-44a5-bb62-474a274c10f1",
+      "focus": "safe_payments_path",
+      "status": "completed",
+      "completed_at": "2026-03-07T22:44:10.472Z",
+      "worker_id": "openclaw-vm",
+      "worker_commit_sha": "e77d89cc15beaf3e0d67252ef85c9aab134695c2",
+      "summary": "Payments-focused inspection still fell back to the existing freshness/regression recommendation.",
+      "path": "jobs/26074dad-ae7b-44a5-bb62-474a274c10f1.md"
+    },
+    {
+      "job_id": "307697f0-000a-4cf8-bf8c-dcc73c5a5ed4",
+      "focus": "outputs_ledger_design",
+      "status": "completed",
+      "completed_at": "2026-03-07T22:52:27.163Z",
+      "worker_id": "openclaw-vm",
+      "worker_commit_sha": "e77d89cc15beaf3e0d67252ef85c9aab134695c2",
+      "summary": "Proposed the canonical architecture for a lean OpenClaw outputs ledger: canonical in Supabase, curated in GitHub.",
+      "path": "jobs/307697f0-000a-4cf8-bf8c-dcc73c5a5ed4.md"
+    }
+  ]
+}
