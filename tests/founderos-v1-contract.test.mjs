@@ -56,7 +56,7 @@ function extractWorkerFreshnessHelpers(source) {
 
   const helperSource = source.slice(markerStart, proposalEnd);
   const factory = new Function(
-    `${helperSource}\nreturn { hasLiveWorkerAuthMarkers, buildImprovementProposal };`
+    `${helperSource}\nreturn { hasLiveWorkerAuthMarkers, inferLane, buildImprovementProposal, buildStructuredOutput };`
   );
 
   return factory();
@@ -114,7 +114,21 @@ test("worker freshness helpers detect live worker-auth markers", async () => {
   );
 });
 
-test("worker recommends freshness track when activation markers are already present", async () => {
+test("worker infers lanes from common objective text", async () => {
+  const source = await readFile(
+    new URL("../services/openclaw/worker-loop.sh", import.meta.url),
+    "utf8"
+  );
+  const { inferLane } = extractWorkerFreshnessHelpers(source);
+
+  assert.equal(inferLane("Security hardening and authority preservation"), "security");
+  assert.equal(inferLane("Operational reliability and recovery readiness"), "operations");
+  assert.equal(inferLane("Organizing workflow, projects, tasks, and business documents"), "workflow");
+  assert.equal(inferLane("Research the output ledger and Stripe path"), "research");
+  assert.equal(inferLane("General repo inspection"), "general");
+});
+
+test("worker recommends inspect-and-propose contract when activation markers are already present", async () => {
   const source = await readFile(
     new URL("../services/openclaw/worker-loop.sh", import.meta.url),
     "utf8"
@@ -131,7 +145,7 @@ test("worker recommends freshness track when activation markers are already pres
   assert.equal(proposal.kind, "safe_improvement_proposal");
   assert.equal(
     proposal.title,
-    "Tighten worker recommendation freshness and add regression coverage"
+    "Upgrade the worker from inspect-and-report to inspect-and-propose"
   );
   assert.deepEqual(proposal.target_files, [
     "services/openclaw/worker-loop.sh",
@@ -139,8 +153,39 @@ test("worker recommends freshness track when activation markers are already pres
   ]);
   assert.equal(
     proposal.candidate_write_set.branch_name,
-    "codex/worker-recommendation-freshness"
+    "codex/worker-inspect-and-propose-contract"
   );
+});
+
+test("worker builds structured output ready for ledger promotion", async () => {
+  const source = await readFile(
+    new URL("../services/openclaw/worker-loop.sh", import.meta.url),
+    "utf8"
+  );
+  const { buildImprovementProposal, buildStructuredOutput } = extractWorkerFreshnessHelpers(source);
+
+  globalThis.objective = "Operational reliability and recovery readiness";
+  const proposal = buildImprovementProposal({
+    repo: "andysalvo/founderos",
+    activationText: "FOUNDEROS_WORKER_KEY\nclaim\nheartbeat\ncomplete\nfail",
+    desiredActivationDoc: "placeholder",
+  });
+  const structured = buildStructuredOutput({
+    job: { id: "job-123" },
+    repo: "andysalvo/founderos",
+    topPaths: ["README.md", "services/openclaw/worker-loop.sh"],
+    activeSurface: ["/api/founderos/health"],
+    improvementProposal: proposal,
+  });
+
+  assert.equal(structured.lane, "operations");
+  assert.equal(structured.status, "completed");
+  assert.equal(structured.importance, "high");
+  assert.equal(structured.promotion_recommended, true);
+  assert.ok(Array.isArray(structured.key_findings));
+  assert.ok(Array.isArray(structured.tags));
+  assert.equal(structured.ledger_entry_stub.job_id, "job-123");
+  assert.equal(structured.ledger_entry_stub.focus, "operations");
 });
 
 test("worker falls back to docs alignment when activation markers are absent", async () => {
