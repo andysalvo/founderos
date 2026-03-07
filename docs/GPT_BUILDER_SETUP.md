@@ -18,18 +18,57 @@ It should point at a public production domain that GPT Actions can reach:
 
 ## Suggested GPT instructions
 
-Use the text in [`docs/GPT_INSTRUCTIONS.md`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/GPT_INSTRUCTIONS.md) as the starting point for the GPT’s instructions.
+Use the text in [`docs/GPT_INSTRUCTIONS.md`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/GPT_INSTRUCTIONS.md) as the starting point.
 
-## Minimal action flow
+The intended GPT behavior is:
 
-1. Call `precommitPlan` to produce a proposal artifact.
-2. Present the artifact to the human for review.
-3. Only call `commitExecute` after the human has frozen the exact `write_set` and explicit authorization fields.
+- inspect the repo first
+- discuss what it found with the user
+- use async orchestration only when the task needs longer-running execution
+- report back durable job results and PR links when they exist
+
+## Recommended action flow
+
+### Read-first flow
+
+Use this for most reasoning and discussion:
+
+1. Call `capabilities` when needed to inspect the active contract.
+2. Call `repoTree` to inspect repo structure.
+3. Call `repoFile` to inspect specific files.
+4. Call `precommitPlan` when a proposal artifact would help shape the next step.
+5. Explain findings and recommendations to the user before escalating.
+
+### Async execution flow
+
+Use this when the request is broader or implementation-heavy:
+
+1. Call `orchestrateSubmit`.
+2. Tell the user that Founderos queued an async job.
+3. Poll `orchestrateJobStatus`.
+4. Summarize the returned result, proposal, or PR outcome for the user.
+
+### Explicit write flow
+
+Use this only when the user has approved the exact write set:
+
+1. Present the exact write set clearly.
+2. Confirm that the user wants that exact write set executed.
+3. Call `commitExecute` only after explicit approval.
+
+## Current practical recommendation
+
+For the current system, the best GPT behavior is:
+
+- use synchronous APS reads for inspection and analysis
+- use `orchestrateSubmit` for “figure out the next improvement and implement it” style requests
+- prefer returning a PR link or durable job result instead of claiming vague autonomous success
 
 ## Troubleshooting
 
-- `GET /api/founderos/capabilities` is public and should return the contract even before auth is attached in the session.
-- Use `capabilitiesCheck` to confirm GPT Builder is actually sending the API key on authenticated calls.
-- Keep the canonical Builder auth config as `x-founderos-key`.
-- Founderos also tolerates `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` as a compatibility fallback for GPT action transport of the same secret.
-- Do not point GPT Builder at a Vercel preview or deployment URL that is behind Vercel Authentication. GPT Actions cannot complete that SSO flow and will fail with `ClientResponseError` before your handler runs.
+- `GET /api/founderos/capabilities` is public and should work before auth is attached in the session.
+- Use `capabilitiesCheck` to verify GPT Builder is actually sending the API key on authenticated calls.
+- Keep the Builder auth config as `x-founderos-key`.
+- Founderos also tolerates `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` as a compatibility fallback.
+- Do not expose worker-only endpoints in GPT Builder.
+- Do not point GPT Builder at a Vercel preview or deployment URL behind Vercel Authentication.
