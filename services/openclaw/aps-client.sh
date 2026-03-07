@@ -60,16 +60,17 @@ process.stdout.write(JSON.stringify(payload));
 }
 
 merge_payload_with_worker_runtime() {
-  local input_payload="${1:-{}}"
   local runtime_json
   runtime_json="$(build_worker_runtime_json)"
 
   node -e '
-const payload = JSON.parse(process.argv[1] || "{}");
-const workerRuntime = JSON.parse(process.argv[2] || "{}");
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+const payload = JSON.parse(input || "{}");
+const workerRuntime = JSON.parse(process.argv[1] || "{}");
 payload.worker_runtime = workerRuntime;
 process.stdout.write(JSON.stringify(payload));
-' "${input_payload}" "${runtime_json}"
+' "${runtime_json}"
 }
 
 case "${cmd}" in
@@ -201,9 +202,9 @@ case "${cmd}" in
     fi
     job_id="$1"
     if [[ -n "${2:-}" ]]; then
-      payload="$(merge_payload_with_worker_runtime "$(cat "$2")")"
+      payload="$(merge_payload_with_worker_runtime < "$2")"
     else
-      payload="$(merge_payload_with_worker_runtime '{}')"
+      payload="$(printf '{}' | merge_payload_with_worker_runtime)"
     fi
     "${worker_lifecycle_curl[@]}" "${worker_auth_header[@]}" \
       --data "${payload}" \
@@ -220,9 +221,9 @@ case "${cmd}" in
     fi
     job_id="$1"
     if [[ -n "${2:-}" ]]; then
-      payload="$(merge_payload_with_worker_runtime "$(cat "$2")")"
+      payload="$(merge_payload_with_worker_runtime < "$2")"
     else
-      payload="$(merge_payload_with_worker_runtime '{}')"
+      payload="$(printf '{}' | merge_payload_with_worker_runtime)"
     fi
     "${worker_lifecycle_curl[@]}" "${worker_auth_header[@]}" \
       --data "${payload}" \
