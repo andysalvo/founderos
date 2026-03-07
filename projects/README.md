@@ -34,6 +34,10 @@ Typical contents might include:
 - links to related repo paths
 - decisions relevant to the project
 
+Active examples:
+
+- `projects/openclaw-outputs-ledger/` — curated mirror of important OpenClaw outputs keyed by `job_id` and backed by canonical Supabase orchestration records
+
 ## Communication rule
 
 When Founderos is operating inside one of these project contexts, project-related messages should begin with the active project name in bold.
