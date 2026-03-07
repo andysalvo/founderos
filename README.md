@@ -6,6 +6,15 @@ First read: [docs/FOUNDEROS_SYSTEM_SPEC.md](/Users/andysalvo_1/Documents/GitHub/
 
 Current live snapshot: [docs/FOUNDEROS_LIVE_STATE.md](/Users/andysalvo_1/Documents/GitHub/founderos/docs/FOUNDEROS_LIVE_STATE.md)
 
+## Core Principles
+
+- The founder remains the decision-maker.
+- AI may propose, structure, and support execution.
+- Irreversible actions must remain attributable to the human.
+- Execution should be bounded, explicit, and inspectable.
+
+Public principles and authority-model docs live in [docs/principles/](/Users/andysalvo_1/Documents/GitHub/founderos/docs/principles/README.md).
+
 ## Active surface
 
 - `GET /api/founderos/health`
