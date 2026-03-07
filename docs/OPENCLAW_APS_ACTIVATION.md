@@ -57,6 +57,8 @@ This repo includes helpers at:
 - [`services/openclaw/aps-client.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/aps-client.sh)
 - [`services/openclaw/extract-candidate-write-set.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/extract-candidate-write-set.sh)
 - [`services/openclaw/freeze-candidate.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/freeze-candidate.sh)
+- [`services/openclaw/decompose-project.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/decompose-project.sh)
+- [`services/openclaw/submit-track.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/submit-track.sh)
 
 `aps-client.sh` supports:
 
@@ -74,12 +76,14 @@ This repo includes helpers at:
 - `complete`
 - `fail`
 
-The new helper scripts support:
+The helper scripts support:
 
 - extracting an exact worker `candidate_write_set` from a completed job,
-- and freezing that exact candidate into a governed APS write-set artifact when the candidate already includes exact file content.
+- freezing that exact candidate into a governed APS write-set artifact when the candidate already includes exact file content,
+- decomposing a broad project objective into deterministic bounded engineering tracks,
+- and submitting one bounded track at a time through APS.
 
-This keeps APS as the authority boundary while making it much faster to promote low-risk worker output into a governed PR path.
+This keeps APS as the authority boundary while making it much faster to promote low-risk worker output and break broad work into reviewable execution lanes.
 
 ## Worker loop startup
 
@@ -122,6 +126,16 @@ bash services/openclaw/freeze-candidate.sh <job_id> <frozen_by>
 
 If the worker candidate is intent-only and does not contain exact file contents yet, the freeze helper will fail closed instead of widening authority implicitly.
 
+Project track decomposition verification:
+
+```bash
+bash services/openclaw/decompose-project.sh "Build a workflow visibility surface for Founderos" /tmp/project-plan.json
+cat /tmp/project-plan.json
+bash services/openclaw/submit-track.sh /tmp/project-plan.json track-1
+```
+
+This flow is intentionally one-track-at-a-time. It creates reviewable bounded lanes without pretending a true swarm scheduler already exists.
+
 ## How execution stays safe
 
 - APS checks the repo allowlist.
@@ -139,6 +153,7 @@ Use Founderos like this:
 2. Let OpenClaw claim and inspect privately on the VM.
 3. Review the returned proposal or write set.
 4. If the worker returned an exact candidate, promote it through the helper path into a governed artifact.
-5. Approve the resulting PR through GitHub when the change is acceptable.
+5. If the work is broad, decompose it into bounded tracks and submit one track at a time.
+6. Approve the resulting PR through GitHub when the change is acceptable.
 
 That is the current safe path from chat intent to bounded self-improvement.
