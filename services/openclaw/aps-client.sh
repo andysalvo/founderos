@@ -27,6 +27,7 @@ shift || true
 
 auth_header=(-H "x-founderos-key: ${WRITE_KEY}" -H "content-type: application/json")
 worker_auth_header=(-H "x-founderos-worker-key: ${WORKER_KEY}" -H "x-founderos-worker-id: ${WORKER_ID}" -H "content-type: application/json")
+worker_lifecycle_curl=(curl --fail-with-body -sS)
 
 json_string() {
   node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "${1:-}"
@@ -168,7 +169,7 @@ case "${cmd}" in
       echo "FOUNDEROS_WORKER_KEY is required" >&2
       exit 1
     fi
-    curl -sS "${worker_auth_header[@]}" \
+    "${worker_lifecycle_curl[@]}" "${worker_auth_header[@]}" \
       -d "{\"worker_runtime\":$(build_worker_runtime_json)}" \
       "${BASE_URL}/api/founderos/orchestrate/claim"
     ;;
@@ -185,7 +186,7 @@ case "${cmd}" in
     status_json="$(json_string "${2:-claimed}")"
     message_json="$(json_string "${3:-}")"
     progress="${4:-null}"
-    curl -sS "${worker_auth_header[@]}" \
+    "${worker_lifecycle_curl[@]}" "${worker_auth_header[@]}" \
       -d "{\"status\":${status_json},\"message\":${message_json},\"progress\":${progress},\"worker_runtime\":$(build_worker_runtime_json)}" \
       "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}/heartbeat"
     ;;
@@ -204,7 +205,7 @@ case "${cmd}" in
     else
       payload="$(merge_payload_with_worker_runtime '{}')"
     fi
-    curl -sS "${worker_auth_header[@]}" \
+    "${worker_lifecycle_curl[@]}" "${worker_auth_header[@]}" \
       --data "${payload}" \
       "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}/complete"
     ;;
@@ -223,7 +224,7 @@ case "${cmd}" in
     else
       payload="$(merge_payload_with_worker_runtime '{}')"
     fi
-    curl -sS "${worker_auth_header[@]}" \
+    "${worker_lifecycle_curl[@]}" "${worker_auth_header[@]}" \
       --data "${payload}" \
       "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}/fail"
     ;;

@@ -272,3 +272,91 @@ test("worker claim requires the worker key", async () => {
   assert.equal(response.json.error, "worker_unauthorized");
 });
 
+test("worker APS client fails closed on lifecycle HTTP errors", async () => {
+  const client = await readFile(
+    new URL("../services/openclaw/aps-client.sh", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(client, /worker_lifecycle_curl=\(curl --fail-with-body -sS\)/);
+  assert.match(client, /claim\)[\s\S]*worker_lifecycle_curl/);
+  assert.match(client, /heartbeat\)[\s\S]*worker_lifecycle_curl/);
+  assert.match(client, /complete\)[\s\S]*worker_lifecycle_curl/);
+  assert.match(client, /fail\)[\s\S]*worker_lifecycle_curl/);
+});
+
+test("complete and fail handlers pass compact lifecycle metadata into orchestration events", async () => {
+  process.env.FOUNDEROS_WORKER_KEY = "worker-key";
+
+  let completedPayload = null;
+  let failedPayload = null;
+
+  const orchestrationMock = {
+    async updateJobLifecycle(_jobId, _workerId, nextStatus, payload) {
+      if (nextStatus === "completed") {
+        completedPayload = payload;
+      } else if (nextStatus === "failed") {
+        failedPayload = payload;
+      }
+
+      return { id: "job-123", status: nextStatus };
+    },
+  };
+
+  const freshCompleteHandler = loadFreshCommonJs(
+    "../api/founderos/orchestrate/jobs/[job_id]/complete.js",
+    {
+      "../api/_lib/orchestration.js": orchestrationMock,
+    }
+  );
+  const freshFailHandler = loadFreshCommonJs("../api/founderos/orchestrate/jobs/[job_id]/fail.js", {
+    "../api/_lib/orchestration.js": orchestrationMock,
+  });
+
+  const sharedBody = {
+    result: {
+      summary: "done",
+      suggested_next_improvement: {
+        title: "large result blob should stay in result_json only",
+      },
+    },
+    worker_runtime: {
+      worker_id: "openclaw-worker",
+      worker_commit_sha: "c".repeat(40),
+    },
+    model_identity: "gpt-5",
+    policy_verdict: {
+      checks_green: true,
+    },
+  };
+
+  const completeResponse = await invoke(freshCompleteHandler, {
+    method: "POST",
+    headers: { "x-founderos-worker-key": "worker-key", "x-founderos-worker-id": "openclaw-worker" },
+    query: { job_id: "job-123" },
+    body: sharedBody,
+  });
+  const failResponse = await invoke(freshFailHandler, {
+    method: "POST",
+    headers: { "x-founderos-worker-key": "worker-key", "x-founderos-worker-id": "openclaw-worker" },
+    query: { job_id: "job-123" },
+    body: sharedBody,
+  });
+
+  assert.equal(completeResponse.statusCode, 200);
+  assert.equal(failResponse.statusCode, 200);
+  assert.deepEqual(completedPayload.event_payload, {
+    status: "completed",
+    result_present: true,
+    policy_verdict_present: true,
+    worker_runtime_present: true,
+  });
+  assert.deepEqual(failedPayload.event_payload, {
+    status: "failed",
+    result_present: true,
+    policy_verdict_present: true,
+    worker_runtime_present: true,
+  });
+  assert.deepEqual(completedPayload.result, sharedBody.result);
+  assert.deepEqual(failedPayload.result, sharedBody.result);
+});

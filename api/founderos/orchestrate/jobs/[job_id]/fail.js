@@ -35,7 +35,12 @@ module.exports = async (req, res) => {
 
     const updated = await updateJobLifecycle(jobId, workerId, "failed", {
       event_type: "job_failed",
-      event_payload: parsed.value,
+      event_payload: {
+        status: "failed",
+        result_present: isPlainObject(parsed.value.result),
+        policy_verdict_present: isPlainObject(parsed.value.policy_verdict),
+        worker_runtime_present: isPlainObject(parsed.value.worker_runtime),
+      },
       result: isPlainObject(parsed.value.result) ? parsed.value.result : {},
       worker_runtime: isPlainObject(parsed.value.worker_runtime) ? parsed.value.worker_runtime : null,
       model_identity:
