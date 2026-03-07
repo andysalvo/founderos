@@ -1,0 +1,41 @@
+# Projects
+
+This directory is the lightweight home for project-scoped work in Founderos.
+
+The system uses only two work scopes:
+
+- repo scope
+- project scope
+
+This directory exists for the second of those scopes.
+
+## Structure rule
+
+Keep project structure shallow.
+
+A project should have one top-level project directory and should not introduce deep nested subprojects unless a later governance change clearly justifies it.
+
+The point is not to build a project-management maze.
+The point is to give bounded work a clear home.
+
+## Recommended pattern
+
+Use one folder per active project:
+
+- `projects/<project-name>/`
+
+Inside that project folder, keep only what is needed to make the work legible.
+
+Typical contents might include:
+
+- a project README
+- a brief or spec
+- notes on current status
+- links to related repo paths
+- decisions relevant to the project
+
+## Communication rule
+
+When Founderos is operating inside one of these project contexts, project-related messages should begin with the active project name in bold.
+
+Outside project scope, communication should remain normal.

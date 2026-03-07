@@ -17,6 +17,22 @@ To understand what Founderos is, how its powers are bounded, how OpenClaw toolin
 
 This governance layer should be treated as required reading before adding OpenClaw tools, broadening execution autonomy, or interpreting Founderos as a general autonomous agent.
 
+## Work scopes
+
+Founderos now formalizes only two work scopes:
+
+- **Repo scope** — the default scope for ordinary conversation, planning, inspection, and whole-repo work
+- **Project scope** — the only narrower scope beneath repo work, used when a bounded project is explicitly active
+
+New threads should begin in ordinary conversation at repo scope by default.
+Project-scoped communication should clearly signal the active project name at the beginning of project-related messages.
+
+For the stable public rule, read:
+
+- `docs/principles/project-scope.md`
+- `docs/governance/amendments/AMENDMENT_004_PROJECT_SCOPE_AND_CONTEXT_SIGNALING.md`
+- `projects/README.md`
+
 First read: [docs/FOUNDEROS_SYSTEM_SPEC.md](/Users/andysalvo_1/Documents/GitHub/founderos/docs/FOUNDEROS_SYSTEM_SPEC.md)
 
 Current live snapshot: [docs/FOUNDEROS_LIVE_STATE.md](/Users/andysalvo_1/Documents/GitHub/founderos/docs/FOUNDEROS_LIVE_STATE.md)
