@@ -55,7 +55,8 @@ build_result_payload() {
   JOB_JSON="${job_json}" node -e '
 const fs = require("fs");
 const targetPath = process.argv[1];
-const job = JSON.parse(process.env.JOB_JSON || "{}");
+const claim = JSON.parse(process.env.JOB_JSON || "{}");
+const job = claim.job || {};
 const tree = JSON.parse(process.env.FOUNDEROS_TREE_JSON || "{}");
 const readme = JSON.parse(process.env.FOUNDEROS_README_JSON || "{}");
 
@@ -63,16 +64,55 @@ const files = Array.isArray(tree.files) ? tree.files : [];
 const topPaths = files.slice(0, 20).map((file) => file.path);
 const readmeText = typeof readme.content === "string" ? readme.content : "";
 const readmeLines = readmeText.split(/\r?\n/).slice(0, 12);
+const activeSurface = files
+  .filter((file) => /^api\/founderos\//.test(file.path))
+  .map((file) => file.path)
+  .sort();
+const selfState = {
+  identity: {
+    name: "Founderos",
+    repo: job.repo || (job.scope_json && job.scope_json.repo) || null,
+    interface_plane: "ChatGPT Custom GPT",
+    execution_plane: "APS + OpenClaw",
+    state_plane: "Supabase",
+    code_plane: "GitHub",
+  },
+  live_runtime: {
+    aps_base_url: process.env.FOUNDEROS_BASE_URL || null,
+    worker_id: process.env.FOUNDEROS_WORKER_ID || "openclaw-worker",
+    job_status: job.status || "claimed",
+  },
+  capabilities: {
+    active_surface: activeSurface,
+    worker_loop_mode: "inspect_and_report",
+    protected_write_boundary: "PR-only governed execution through APS",
+  },
+  current_limitations: [
+    "Worker returns structured inspection results but does not yet generate exact write sets.",
+    "Autonomous PR creation is not yet wired through the async worker lane.",
+    "Durable memory kernel beyond orchestration history is still planned work.",
+  ],
+};
 
 const result = {
-  summary: "Initial worker inspection completed.",
+  summary: "Initial worker self-state inspection completed.",
   result: {
     repo: job.repo || (job.scope_json && job.scope_json.repo) || null,
     file_count: files.length,
     top_paths: topPaths,
     recommended_next_action:
-      "Review the repo snapshot and create a bounded write_set for one safe improvement PR.",
+      "Generate one safe improvement proposal with target files, rationale, and a bounded candidate write set.",
     readme_excerpt: readmeLines,
+    self_state: selfState,
+    suggested_next_improvement: {
+      kind: "safe_improvement_proposal",
+      priority: "high",
+      rationale:
+        "The system can inspect and report on itself, but it still lacks autonomous write-set generation for PR-based self-improvement.",
+      target_area: "services/openclaw and orchestration result shaping",
+      expected_outcome:
+        "Return a concrete safe improvement proposal that can later be translated into a PR-ready write set.",
+    },
   },
 };
 

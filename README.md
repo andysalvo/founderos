@@ -1,8 +1,10 @@
 # Founderos
 
-Private founder operating system with a verified APS v1 control-plane seed.
+Private founder operating system with a verified APS control-plane seed and a live async worker loop.
 
 First read: [docs/FOUNDEROS_SYSTEM_SPEC.md](/Users/andysalvo_1/Documents/GitHub/founderos/docs/FOUNDEROS_SYSTEM_SPEC.md)
+
+Current live snapshot: [docs/FOUNDEROS_LIVE_STATE.md](/Users/andysalvo_1/Documents/GitHub/founderos/docs/FOUNDEROS_LIVE_STATE.md)
 
 ## Active surface
 
@@ -13,6 +15,8 @@ First read: [docs/FOUNDEROS_SYSTEM_SPEC.md](/Users/andysalvo_1/Documents/GitHub/
 - `POST /api/founderos/repo/file`
 - `POST /api/founderos/repo/tree`
 - `POST /api/founderos/commit/execute`
+- `POST /api/founderos/orchestrate/submit`
+- `GET /api/founderos/orchestrate/jobs/{job_id}`
 
 The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml).
 
@@ -23,8 +27,10 @@ The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Docum
 - `capabilities` is public and read-only so GPT sessions can inspect the active contract before authenticated calls begin.
 - `repo/file` and `repo/tree` read live GitHub state from allowlisted repos through server-side GitHub App auth.
 - `commit/execute` is the only durable-write path. It is mechanical, hash-bound, and requires explicit authorization.
+- `orchestrate/submit` and `orchestrate/jobs/{job_id}` provide the public async lane for longer-running worker tasks.
 - Witness logging happens before GitHub writes begin. If witness recording is unavailable, execution fails closed.
 - GitHub App and Supabase credentials remain server-side.
+- OpenClaw on the VM can now autonomously claim async jobs, inspect the repo, and return structured results through APS.
 
 ## Deployment and setup
 
