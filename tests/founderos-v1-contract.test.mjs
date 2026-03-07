@@ -12,6 +12,7 @@ const capabilitiesCheckHandler = require("../api/founderos/capabilities/check.js
 const precommitPlanHandler = require("../api/founderos/precommit/plan.js");
 const repoFileHandler = require("../api/founderos/repo/file.js");
 const repoTreeHandler = require("../api/founderos/repo/tree.js");
+const freezeWriteSetHandler = require("../api/founderos/commit/freeze-write-set.js");
 const commitExecuteHandler = require("../api/founderos/commit/execute.js");
 const commitAutoExecuteHandler = require("../api/founderos/commit/auto-execute.js");
 const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit.js");
@@ -60,6 +61,37 @@ function extractWorkerFreshnessHelpers(source) {
   return factory();
 }
 
+function loadFreshCommonJs(modulePath, mocks = {}) {
+  const resolvedTarget = require.resolve(modulePath);
+  const priorEntries = new Map();
+
+  delete require.cache[resolvedTarget];
+
+  for (const [mockPath, mockExports] of Object.entries(mocks)) {
+    const resolvedMock = require.resolve(mockPath);
+    priorEntries.set(resolvedMock, require.cache[resolvedMock]);
+    require.cache[resolvedMock] = {
+      id: resolvedMock,
+      filename: resolvedMock,
+      loaded: true,
+      exports: mockExports,
+    };
+  }
+
+  try {
+    return require(resolvedTarget);
+  } finally {
+    delete require.cache[resolvedTarget];
+    for (const [resolvedMock, priorEntry] of priorEntries.entries()) {
+      if (priorEntry) {
+        require.cache[resolvedMock] = priorEntry;
+      } else {
+        delete require.cache[resolvedMock];
+      }
+    }
+  }
+}
+
 test("OpenAPI surface exposes only the public APS contract", async () => {
   const openapi = await readFile(new URL("../docs/openapi.founderos.yaml", import.meta.url), "utf8");
 
@@ -79,6 +111,7 @@ test("OpenAPI surface exposes only the public APS contract", async () => {
     "/api/founderos/precommit/plan:",
     "/api/founderos/repo/file:",
     "/api/founderos/repo/tree:",
+    "/api/founderos/commit/freeze-write-set:",
     "/api/founderos/commit/execute:",
     "/api/founderos/orchestrate/submit:",
     "/api/founderos/orchestrate/jobs/{job_id}:",
@@ -116,7 +149,7 @@ test("capabilities is public and returns only the nine public APS endpoints", as
   const response = await invoke(capabilitiesHandler, { method: "GET", headers: {} });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.endpoints.length, 9);
+  assert.equal(response.json.endpoints.length, 10);
   assert.equal(response.json.openapi.path, "docs/openapi.founderos.yaml");
   assert.equal(response.json.worker_auth.header, "x-founderos-worker-key");
   assert.deepEqual(
@@ -128,6 +161,7 @@ test("capabilities is public and returns only the nine public APS endpoints", as
       "/api/founderos/precommit/plan",
       "/api/founderos/repo/file",
       "/api/founderos/repo/tree",
+      "/api/founderos/commit/freeze-write-set",
       "/api/founderos/commit/execute",
       "/api/founderos/orchestrate/submit",
       "/api/founderos/orchestrate/jobs/{job_id}",
@@ -168,7 +202,7 @@ test("capabilities check mirrors capabilities over POST", async () => {
 
   assert.equal(authorized.statusCode, 200);
   assert.equal(authorized.json.ok, true);
-  assert.equal(authorized.json.endpoints.length, 9);
+  assert.equal(authorized.json.endpoints.length, 10);
   assert.equal(authorized.json.endpoints[2].path, "/api/founderos/capabilities/check");
 });
 
@@ -227,6 +261,39 @@ test("commit.auto-execute requires the worker key", async () => {
 
   assert.equal(response.statusCode, 401);
   assert.equal(response.json.error, "worker_unauthorized");
+});
+
+test("commit.freeze-write-set fails closed when artifact storage is not configured", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+  delete process.env.SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const response = await invoke(freezeWriteSetHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      write_set: {
+        branch_name: "codex/frozen-test",
+        base_branch: "main",
+        title: "Freeze test",
+        repo: "owner/repo",
+        files: [
+          {
+            path: "docs/frozen.md",
+            action: "create",
+            content: "hello",
+          },
+        ],
+      },
+      plan_artifact_id: "plan_123",
+      plan_artifact_hash: "plan_hash",
+      frozen_by: "tester",
+    },
+  });
+
+  assert.equal(response.statusCode, 500);
+  assert.equal(response.json.error, "artifact_store_not_configured");
 });
 
 test("commit.auto-execute rejects non-doc paths", async () => {
@@ -439,5 +506,155 @@ test("worker recommendation freshness avoids repeating already-landed docs fixes
   assert.equal(
     proposal.candidate_write_set.files[1].path,
     "tests/founderos-v1-contract.test.mjs"
+  );
+});
+
+test("large write sets can be frozen and executed from server-canonical payloads", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+  process.env.GITHUB_APP_ID = "123";
+  process.env.GITHUB_INSTALLATION_ID = "456";
+  process.env.GITHUB_APP_PRIVATE_KEY = "test-private-key";
+  process.env.SUPABASE_URL = "https://supabase.example";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+
+  const storage = {
+    plan_artifacts: [],
+    witness_events: [],
+  };
+  const githubCalls = [];
+
+  const supabaseMock = {
+    buildWitnessEvent(type, actor, payload, artifactId, commitId) {
+      return {
+        id: `witness-${storage.witness_events.length + 1}`,
+        ts: new Date().toISOString(),
+        type,
+        commit_id: commitId || null,
+        artifact_id: artifactId || null,
+        actor,
+        payload,
+      };
+    },
+    getSupabaseConfig() {
+      return { url: "https://supabase.example", serviceRoleKey: "service-role-key" };
+    },
+    async insertRow(_config, table, row) {
+      storage[table].push(row);
+      return row;
+    },
+    async selectRows(_config, table, filters) {
+      const rows = storage[table] || [];
+      return rows.filter((row) => {
+        return Object.entries(filters || {}).every(([key, value]) => {
+          if (typeof value === "string" && value.startsWith("eq.")) {
+            return row[key] === value.slice(3);
+          }
+          return row[key] === value;
+        });
+      });
+    },
+  };
+
+  const githubMock = {
+    encodePathForGitHub(path) {
+      return path.split("/").map(encodeURIComponent).join("/");
+    },
+    async getInstallationToken() {
+      assert.ok(
+        storage.witness_events.some((row) => row.type === "commit.execution_authorized")
+      );
+      return "installation-token";
+    },
+    async githubRequest(_token, method, path, body) {
+      githubCalls.push({ method, path, body });
+      if (method === "GET" && path.includes("/git/ref/heads/")) {
+        return { object: { sha: "base-sha" } };
+      }
+      if (method === "POST" && path.endsWith("/git/refs")) {
+        return { ref: body.ref, object: { sha: body.sha } };
+      }
+      if (method === "PUT" && path.includes("/contents/")) {
+        return { content: { path } };
+      }
+      if (method === "POST" && path.endsWith("/pulls")) {
+        return { html_url: "https://github.com/owner/repo/pull/99", number: 99 };
+      }
+      throw new Error(`unexpected github request: ${method} ${path}`);
+    },
+  };
+
+  const commitExecution = loadFreshCommonJs("../api/_lib/commit-execution.js", {
+    "../api/_lib/supabase.js": supabaseMock,
+    "../api/_lib/github.js": githubMock,
+  });
+  const freshFreezeHandler = loadFreshCommonJs("../api/founderos/commit/freeze-write-set.js", {
+    "../api/_lib/commit-execution.js": commitExecution,
+  });
+  const freshCommitExecuteHandler = loadFreshCommonJs("../api/founderos/commit/execute.js", {
+    "../api/_lib/commit-execution.js": commitExecution,
+  });
+
+  const largeContent = `# Large Patch\n\n${"payload-line\n".repeat(4000)}`;
+  const writeSet = {
+    branch_name: "codex/large-server-frozen-patch",
+    base_branch: "main",
+    title: "Large frozen patch",
+    repo: "owner/repo",
+    files: [
+      {
+        path: "docs/large-frozen-patch.md",
+        action: "create",
+        content: largeContent,
+      },
+    ],
+  };
+
+  const freezeResponse = await invoke(freshFreezeHandler, {
+    method: "POST",
+    headers: { authorization: "Bearer test-key" },
+    body: {
+      write_set: writeSet,
+      plan_artifact_id: "plan_large_123",
+      plan_artifact_hash: "plan_hash_large_123",
+      frozen_by: "tester",
+    },
+  });
+
+  assert.equal(freezeResponse.statusCode, 200);
+  assert.equal(freezeResponse.json.ok, true);
+  assert.equal(freezeResponse.json.artifact.write_set_hash, createHash("sha256").update(JSON.stringify(writeSet)).digest("hex"));
+
+  const executeResponse = await invoke(freshCommitExecuteHandler, {
+    method: "POST",
+    headers: { authorization: "Bearer test-key" },
+    body: {
+      authorization: {
+        plan_artifact_id: "plan_large_123",
+        plan_artifact_hash: "plan_hash_large_123",
+        frozen_write_set_artifact_id: freezeResponse.json.artifact.id,
+        frozen_write_set_artifact_hash: freezeResponse.json.artifact.content_hash,
+        authorized_by: "tester",
+      },
+    },
+  });
+
+  assert.equal(executeResponse.statusCode, 200);
+  assert.equal(executeResponse.json.ok, true);
+  assert.equal(executeResponse.json.execution.repo, "owner/repo");
+  assert.equal(executeResponse.json.execution.files_written, 1);
+  assert.equal(
+    executeResponse.json.execution.write_set_hash,
+    freezeResponse.json.artifact.write_set_hash
+  );
+  assert.equal(executeResponse.json.execution.pr_number, 99);
+  assert.ok(
+    storage.witness_events.some((row) => row.type === "commit.write_set_frozen")
+  );
+  assert.ok(
+    storage.witness_events.some((row) => row.type === "commit.execution_authorized")
+  );
+  assert.ok(
+    githubCalls.some((call) => call.method === "POST" && call.path.endsWith("/pulls"))
   );
 });

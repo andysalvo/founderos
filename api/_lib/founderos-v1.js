@@ -51,6 +51,13 @@ const ENDPOINTS = [
     purpose: "List files from an allowlisted GitHub repo via server-side GitHub App auth.",
   },
   {
+    operationId: "freezeWriteSet",
+    method: "POST",
+    path: "/api/founderos/commit/freeze-write-set",
+    auth: "apiKey",
+    purpose: "Persist one exact canonical write set server-side so commit.execute can execute by frozen artifact id.",
+  },
+  {
     operationId: "commitExecute",
     method: "POST",
     path: "/api/founderos/commit/execute",

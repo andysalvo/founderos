@@ -1,7 +1,7 @@
 const { randomUUID } = require("crypto");
 const { getAllowedRepos, hashJson, isPlainObject, isProtectedPath } = require("./founderos-v1");
 const { encodePathForGitHub, getInstallationToken, githubRequest } = require("./github");
-const { getSupabaseConfig, insertRow } = require("./supabase");
+const { buildWitnessEvent, getSupabaseConfig, insertRow, selectRows } = require("./supabase");
 
 function validateWriteSet(writeSet) {
   if (!isPlainObject(writeSet)) {
@@ -125,6 +125,218 @@ function buildWitnessRow(type, artifactId, actor, writeSet, writeSetHash, planAr
   });
 
   return row;
+}
+
+function buildContentHash(row) {
+  return hashJson({
+    ts: row.ts,
+    type: row.type,
+    commit_id: row.commit_id,
+    artifact_id: row.artifact_id,
+    actor: row.actor,
+    payload: row.payload,
+  });
+}
+
+function buildFrozenWriteSetArtifact(writeSet, actor, planArtifactId, planArtifactHash) {
+  const createdAt = new Date().toISOString();
+  const artifactWithoutHash = {
+    id: `frozen_write_set_${Date.now()}_${randomUUID().slice(0, 8)}`,
+    type: "exact_write_set_frozen",
+    created_at: createdAt,
+    frozen_by: actor,
+    plan_artifact_id: planArtifactId,
+    plan_artifact_hash: planArtifactHash,
+    write_set_hash: hashJson(writeSet),
+    write_set: writeSet,
+  };
+
+  return {
+    ...artifactWithoutHash,
+    content_hash: hashJson(artifactWithoutHash),
+  };
+}
+
+async function freezeWriteSet({ writeSet, actor, planArtifactId, planArtifactHash }) {
+  const validation = validateWriteSet(writeSet);
+  if (!validation.ok) {
+    const error = new Error(validation.error);
+    error.code = validation.error;
+    error.statusCode = validation.statusCode || 400;
+    error.path = validation.path;
+    throw error;
+  }
+
+  const config = getSupabaseConfig();
+  if (!config) {
+    const error = new Error("artifact_store_not_configured");
+    error.code = "artifact_store_not_configured";
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const artifact = buildFrozenWriteSetArtifact(writeSet, actor, planArtifactId, planArtifactHash);
+  await insertRow(config, "plan_artifacts", {
+    id: artifact.id,
+    created_at: artifact.created_at,
+    repo: writeSet.repo,
+    scope_json: {
+      repo: writeSet.repo,
+      branch: writeSet.base_branch,
+    },
+    artifact_json: artifact,
+    content_hash: artifact.content_hash,
+    source_job_id: null,
+  });
+
+  const witnessEvent = buildWitnessEvent(
+    "commit.write_set_frozen",
+    actor,
+    {
+      repo: writeSet.repo,
+      plan_artifact_id: planArtifactId,
+      plan_artifact_hash: planArtifactHash,
+      write_set_hash: artifact.write_set_hash,
+      frozen_write_set_artifact_id: artifact.id,
+      file_count: writeSet.files.length,
+    },
+    artifact.id,
+    null
+  );
+  witnessEvent.content_hash = buildContentHash(witnessEvent);
+  await insertRow(config, "witness_events", witnessEvent);
+
+  return artifact;
+}
+
+async function resolveFrozenWriteSetArtifact(frozenArtifactId, frozenArtifactHash) {
+  const config = getSupabaseConfig();
+  if (!config) {
+    const error = new Error("artifact_store_not_configured");
+    error.code = "artifact_store_not_configured";
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const rows = await selectRows(
+    config,
+    "plan_artifacts",
+    { id: `eq.${frozenArtifactId}` },
+    "id,content_hash,artifact_json",
+    undefined,
+    1
+  );
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (!row || !isPlainObject(row.artifact_json)) {
+    const error = new Error("frozen_write_set_not_found");
+    error.code = "frozen_write_set_not_found";
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (typeof frozenArtifactHash === "string" && frozenArtifactHash.length > 0) {
+    if (row.content_hash !== frozenArtifactHash) {
+      const error = new Error("frozen_write_set_hash_mismatch");
+      error.code = "frozen_write_set_hash_mismatch";
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  const artifact = row.artifact_json;
+  if (
+    artifact.type !== "exact_write_set_frozen" ||
+    !isPlainObject(artifact.write_set)
+  ) {
+    const error = new Error("frozen_write_set_invalid");
+    error.code = "frozen_write_set_invalid";
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return artifact;
+}
+
+async function resolveWriteSetForExecution({ writeSet, authorization }) {
+  if (!isPlainObject(authorization)) {
+    return { ok: false, statusCode: 400, error: "authorization_required" };
+  }
+
+  if (
+    typeof authorization.plan_artifact_id !== "string" ||
+    authorization.plan_artifact_id.length === 0
+  ) {
+    return { ok: false, statusCode: 400, error: "plan_artifact_id_required" };
+  }
+
+  if (
+    typeof authorization.plan_artifact_hash !== "string" ||
+    authorization.plan_artifact_hash.length === 0
+  ) {
+    return { ok: false, statusCode: 400, error: "plan_artifact_hash_required" };
+  }
+
+  if (
+    typeof authorization.authorized_by !== "string" ||
+    authorization.authorized_by.length === 0
+  ) {
+    return { ok: false, statusCode: 400, error: "authorized_by_required" };
+  }
+
+  if (
+    typeof authorization.frozen_write_set_artifact_id === "string" &&
+    authorization.frozen_write_set_artifact_id.length > 0
+  ) {
+    const frozenArtifact = await resolveFrozenWriteSetArtifact(
+      authorization.frozen_write_set_artifact_id,
+      authorization.frozen_write_set_artifact_hash
+    );
+
+    if (frozenArtifact.plan_artifact_id !== authorization.plan_artifact_id) {
+      return { ok: false, statusCode: 400, error: "plan_artifact_mismatch" };
+    }
+
+    if (frozenArtifact.plan_artifact_hash !== authorization.plan_artifact_hash) {
+      return { ok: false, statusCode: 400, error: "plan_artifact_hash_mismatch" };
+    }
+
+    return {
+      ok: true,
+      writeSet: frozenArtifact.write_set,
+      actor: authorization.authorized_by,
+      artifactId: frozenArtifact.id,
+      planArtifactHash: authorization.plan_artifact_hash,
+    };
+  }
+
+  const validation = validateWriteSet(writeSet);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      statusCode: validation.statusCode || 400,
+      error: validation.error,
+      path: validation.path,
+    };
+  }
+
+  if (
+    typeof authorization.write_set_hash !== "string" ||
+    authorization.write_set_hash.length === 0
+  ) {
+    return { ok: false, statusCode: 400, error: "write_set_hash_required" };
+  }
+
+  if (hashJson(writeSet) !== authorization.write_set_hash) {
+    return { ok: false, statusCode: 400, error: "write_set_hash_mismatch" };
+  }
+
+  return {
+    ok: true,
+    writeSet,
+    actor: authorization.authorized_by,
+    artifactId: authorization.plan_artifact_id,
+    planArtifactHash: authorization.plan_artifact_hash,
+  };
 }
 
 async function executeWriteSet({
@@ -318,5 +530,7 @@ async function executeWriteSet({
 
 module.exports = {
   executeWriteSet,
+  freezeWriteSet,
+  resolveWriteSetForExecution,
   validateWriteSet,
 };

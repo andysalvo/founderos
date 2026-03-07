@@ -8,6 +8,7 @@ const capabilitiesCheckHandler = require("../api/founderos/capabilities/check");
 const precommitPlanHandler = require("../api/founderos/precommit/plan");
 const repoFileHandler = require("../api/founderos/repo/file");
 const repoTreeHandler = require("../api/founderos/repo/tree");
+const freezeWriteSetHandler = require("../api/founderos/commit/freeze-write-set");
 const commitExecuteHandler = require("../api/founderos/commit/execute");
 const commitAutoExecuteHandler = require("../api/founderos/commit/auto-execute");
 const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit");
@@ -27,6 +28,7 @@ const routes = new Map([
   ["POST /api/founderos/precommit/plan", precommitPlanHandler],
   ["POST /api/founderos/repo/file", repoFileHandler],
   ["POST /api/founderos/repo/tree", repoTreeHandler],
+  ["POST /api/founderos/commit/freeze-write-set", freezeWriteSetHandler],
   ["POST /api/founderos/commit/execute", commitExecuteHandler],
   ["POST /api/founderos/commit/auto-execute", commitAutoExecuteHandler],
   ["POST /api/founderos/orchestrate/submit", orchestrateSubmitHandler],

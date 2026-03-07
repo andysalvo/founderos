@@ -1,12 +1,14 @@
 const {
-  hashJson,
   isPlainObject,
   parseJsonBody,
   requireApiKey,
   requireMethod,
   sendJson,
 } = require("../../_lib/founderos-v1");
-const { executeWriteSet, validateWriteSet } = require("../../_lib/commit-execution");
+const {
+  executeWriteSet,
+  resolveWriteSetForExecution,
+} = require("../../_lib/commit-execution");
 
 module.exports = async (req, res) => {
   try {
@@ -24,59 +26,24 @@ module.exports = async (req, res) => {
     }
 
     const body = parsed.value;
-    const writeSet = body.write_set;
     const authorization = body.authorization;
-
-    const validation = validateWriteSet(writeSet);
-    if (!validation.ok) {
-      return sendJson(res, validation.statusCode || 400, {
+    const resolved = await resolveWriteSetForExecution({
+      writeSet: body.write_set,
+      authorization,
+    });
+    if (!resolved.ok) {
+      return sendJson(res, resolved.statusCode || 400, {
         ok: false,
-        error: validation.error,
-        ...(validation.path ? { path: validation.path } : {}),
+        error: resolved.error,
+        ...(resolved.path ? { path: resolved.path } : {}),
       });
     }
 
-    if (!isPlainObject(authorization)) {
-      return sendJson(res, 400, { ok: false, error: "authorization_required" });
-    }
-
-    if (
-      typeof authorization.plan_artifact_id !== "string" ||
-      authorization.plan_artifact_id.length === 0
-    ) {
-      return sendJson(res, 400, { ok: false, error: "plan_artifact_id_required" });
-    }
-
-    if (
-      typeof authorization.plan_artifact_hash !== "string" ||
-      authorization.plan_artifact_hash.length === 0
-    ) {
-      return sendJson(res, 400, { ok: false, error: "plan_artifact_hash_required" });
-    }
-
-    if (
-      typeof authorization.write_set_hash !== "string" ||
-      authorization.write_set_hash.length === 0
-    ) {
-      return sendJson(res, 400, { ok: false, error: "write_set_hash_required" });
-    }
-
-    if (
-      typeof authorization.authorized_by !== "string" ||
-      authorization.authorized_by.length === 0
-    ) {
-      return sendJson(res, 400, { ok: false, error: "authorized_by_required" });
-    }
-
-    if (hashJson(writeSet) !== authorization.write_set_hash) {
-      return sendJson(res, 400, { ok: false, error: "write_set_hash_mismatch" });
-    }
-
     const executed = await executeWriteSet({
-      writeSet,
-      actor: authorization.authorized_by,
-      artifactId: authorization.plan_artifact_id,
-      planArtifactHash: authorization.plan_artifact_hash,
+      writeSet: resolved.writeSet,
+      actor: resolved.actor,
+      artifactId: resolved.artifactId,
+      planArtifactHash: resolved.planArtifactHash,
       witnessType: "commit.execution_authorized",
       docsOnly: false,
     });

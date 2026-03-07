@@ -525,6 +525,48 @@ components:
           minItems: 1
       required: [branch_name, base_branch, title, repo, files]
       additionalProperties: false
+    FreezeWriteSetRequest:
+      type: object
+      properties:
+        write_set:
+          $ref: "#/components/schemas/WriteSet"
+        plan_artifact_id:
+          type: string
+        plan_artifact_hash:
+          type: string
+        frozen_by:
+          type: string
+      required: [write_set, plan_artifact_id, plan_artifact_hash, frozen_by]
+      additionalProperties: false
+    FreezeWriteSetResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        artifact:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+            content_hash:
+              type: string
+            write_set_hash:
+              type: string
+            repo:
+              type: string
+            branch_name:
+              type: string
+            base_branch:
+              type: string
+            files_written:
+              type: integer
+          required: [id, type, content_hash, write_set_hash, repo, branch_name, base_branch, files_written]
+          additionalProperties: false
+      required: [ok, artifact]
+      additionalProperties: false
     CommitAuthorization:
       type: object
       properties:
@@ -534,9 +576,13 @@ components:
           type: string
         write_set_hash:
           type: string
+        frozen_write_set_artifact_id:
+          type: string
+        frozen_write_set_artifact_hash:
+          type: string
         authorized_by:
           type: string
-      required: [plan_artifact_id, plan_artifact_hash, write_set_hash, authorized_by]
+      required: [plan_artifact_id, plan_artifact_hash, authorized_by]
       additionalProperties: false
     CommitExecuteRequest:
       type: object
@@ -545,7 +591,7 @@ components:
           $ref: "#/components/schemas/WriteSet"
         authorization:
           $ref: "#/components/schemas/CommitAuthorization"
-      required: [write_set, authorization]
+      required: [authorization]
       additionalProperties: false
     CommitExecuteResponse:
       type: object
@@ -790,10 +836,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/commit/freeze-write-set:
+    post:
+      operationId: freezeWriteSet
+      summary: Persist one exact canonical write set server-side for later governed execution
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreezeWriteSetRequest"
+      responses:
+        "200":
+          description: Frozen write set artifact returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreezeWriteSetResponse"
+        "400":
+          description: Invalid request body or write set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Repo or path rejected by server policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Artifact storage is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/founderos/commit/execute:
     post:
       operationId: commitExecute
-      summary: Execute one exact, pre-authorized write set
+      summary: Execute one exact pre-authorized write set or a server-frozen write set artifact
       security:
         - FounderosApiKey: []
       requestBody:
