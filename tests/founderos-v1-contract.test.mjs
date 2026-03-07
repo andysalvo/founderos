@@ -465,7 +465,7 @@ test("commit.execute fails closed when witness storage is not configured", async
   assert.equal(response.json.error, "witness_not_configured");
 });
 
-test("worker recommendation freshness avoids repeating already-landed docs fixes", async () => {
+test("worker inspect-and-propose helper returns the upgraded bounded proposal shape", async () => {
   const workerLoop = await readFile(
     new URL("../services/openclaw/worker-loop.sh", import.meta.url),
     "utf8"
@@ -487,25 +487,29 @@ test("worker recommendation freshness avoids repeating already-landed docs fixes
   const proposal = buildImprovementProposal({
     repo: "owner/repo",
     activationText,
-    desiredActivationDoc: "unused in freshness path",
+    desiredActivationDoc: "unused in inspect-and-propose path",
   });
 
   assert.equal(
     proposal.title,
-    "Tighten worker recommendation freshness and add regression coverage"
+    "Upgrade the worker from inspect-and-report to inspect-and-propose"
   );
   assert.deepEqual(proposal.target_files, [
     "services/openclaw/worker-loop.sh",
-    "tests/founderos-v1-contract.test.mjs",
+    "services/openclaw/aps-client.sh",
+    "docs/FOUNDEROS_LIVE_STATE.md",
+    "README.md",
   ]);
-  assert.equal(proposal.candidate_write_set.files.length, 2);
-  assert.equal(
-    proposal.candidate_write_set.files[0].path,
-    "services/openclaw/worker-loop.sh"
-  );
-  assert.equal(
-    proposal.candidate_write_set.files[1].path,
-    "tests/founderos-v1-contract.test.mjs"
+  assert.equal(proposal.candidate_write_set.mode, "exact_write_set_candidate");
+  assert.equal(proposal.candidate_write_set.files.length, 4);
+  assert.deepEqual(
+    proposal.candidate_write_set.files.map((file) => file.path),
+    [
+      "services/openclaw/worker-loop.sh",
+      "services/openclaw/aps-client.sh",
+      "docs/FOUNDEROS_LIVE_STATE.md",
+      "README.md",
+    ]
   );
 });
 
