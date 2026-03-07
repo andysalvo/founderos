@@ -71,7 +71,7 @@ Current worker mode:
 - claim one job
 - inspect the repo tree
 - inspect `README.md`
-- return a structured self-state snapshot and next-step recommendation
+- return a structured self-state snapshot and a bounded next-improvement proposal
 
 Current worker does not yet:
 
@@ -112,3 +112,11 @@ The next safe autonomy milestone is:
 `inspect -> choose one safe improvement -> generate bounded candidate write set -> open PR`
 
 That is the bridge from autonomous inspection to autonomous self-improvement by PR.
+
+The worker is now moving toward the first half of that loop by returning:
+
+- self-state
+- target files
+- rationale
+- acceptance criteria
+- a candidate write-set scaffold

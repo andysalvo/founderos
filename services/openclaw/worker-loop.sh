@@ -68,10 +68,38 @@ const activeSurface = files
   .filter((file) => /^api\/founderos\//.test(file.path))
   .map((file) => file.path)
   .sort();
+const repo = job.repo || (job.scope_json && job.scope_json.repo) || null;
+const candidateFiles = [
+  "services/openclaw/worker-loop.sh",
+  "services/openclaw/aps-client.sh",
+  "docs/FOUNDEROS_LIVE_STATE.md",
+  "README.md",
+];
+const candidateWriteSet = {
+  mode: "proposal_only",
+  repo,
+  branch_name: "codex/safe-improvement-proposal",
+  base_branch: "main",
+  title: "Improve autonomous proposal generation for Founderos worker",
+  rationale:
+    "The worker can inspect and describe the system, but it should next emit one bounded improvement proposal with enough structure to translate into a PR-ready write set.",
+  files: candidateFiles.map((path) => ({
+    path,
+    action: "update",
+    intent:
+      path === "services/openclaw/worker-loop.sh"
+        ? "Generate a concrete safe improvement proposal from inspection results."
+        : path === "services/openclaw/aps-client.sh"
+          ? "Support any additional worker-side orchestration calls needed by proposal generation."
+          : path === "docs/FOUNDEROS_LIVE_STATE.md"
+            ? "Keep the live-state document aligned with the richer autonomous behavior."
+            : "Keep top-level system documentation aligned with the new worker capability.",
+  })),
+};
 const selfState = {
   identity: {
     name: "Founderos",
-    repo: job.repo || (job.scope_json && job.scope_json.repo) || null,
+    repo,
     interface_plane: "ChatGPT Custom GPT",
     execution_plane: "APS + OpenClaw",
     state_plane: "Supabase",
@@ -80,7 +108,7 @@ const selfState = {
   live_runtime: {
     aps_base_url: process.env.FOUNDEROS_BASE_URL || null,
     worker_id: process.env.FOUNDEROS_WORKER_ID || "openclaw-worker",
-    job_status: job.status || "claimed",
+    job_status: "completed",
   },
   capabilities: {
     active_surface: activeSurface,
@@ -97,21 +125,35 @@ const selfState = {
 const result = {
   summary: "Initial worker self-state inspection completed.",
   result: {
-    repo: job.repo || (job.scope_json && job.scope_json.repo) || null,
+    repo,
     file_count: files.length,
     top_paths: topPaths,
     recommended_next_action:
-      "Generate one safe improvement proposal with target files, rationale, and a bounded candidate write set.",
+      "Review the bounded safe improvement proposal and promote it into a PR-ready exact write set.",
     readme_excerpt: readmeLines,
     self_state: selfState,
     suggested_next_improvement: {
       kind: "safe_improvement_proposal",
       priority: "high",
+      title: "Upgrade the worker from inspect-and-report to inspect-and-propose",
       rationale:
         "The system can inspect and report on itself, but it still lacks autonomous write-set generation for PR-based self-improvement.",
-      target_area: "services/openclaw and orchestration result shaping",
+      risk_level: "low",
+      target_area: "services/openclaw, result shaping, and operator-facing docs",
+      target_files: candidateFiles,
+      proposed_changes: [
+        "Generate a concrete safe improvement proposal from worker inspection output.",
+        "Return rationale, target files, acceptance criteria, and a candidate write-set scaffold in the job result.",
+        "Keep the live-state and README docs aligned with the improved worker behavior.",
+      ],
+      acceptance_criteria: [
+        "Completed jobs include a bounded improvement proposal with explicit target files.",
+        "Proposal output remains within the existing PR-only guarded execution model.",
+        "Documentation reflects the richer autonomous worker behavior without overstating capabilities.",
+      ],
       expected_outcome:
-        "Return a concrete safe improvement proposal that can later be translated into a PR-ready write set.",
+        "Return a concrete safe improvement proposal that can later be translated into a PR-ready exact write set.",
+      candidate_write_set: candidateWriteSet,
     },
   },
 };
