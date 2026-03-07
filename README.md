@@ -36,6 +36,7 @@ The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Docum
 - Witness logging happens before GitHub writes begin. If witness recording is unavailable, execution fails closed.
 - GitHub App and Supabase credentials remain server-side.
 - OpenClaw on the VM can now autonomously claim async jobs, inspect the repo, and return structured results through APS with worker runtime commit attribution in heartbeat and completion payloads.
+- Worker jobs now return structured inspection results plus a dedicated bounded proposal block that can be reviewed and promoted into an exact write set.
 
 ## Deployment and setup
 
