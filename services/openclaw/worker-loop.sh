@@ -60,6 +60,8 @@ const job = claim.job || {};
 const tree = JSON.parse(process.env.FOUNDEROS_TREE_JSON || "{}");
 const readme = JSON.parse(process.env.FOUNDEROS_README_JSON || "{}");
 const activationDoc = JSON.parse(process.env.FOUNDEROS_ACTIVATION_DOC_JSON || "{}");
+const decisionsIndex = JSON.parse(process.env.FOUNDEROS_DECISIONS_INDEX_JSON || "{}");
+const decisionDocs = JSON.parse(process.env.FOUNDEROS_DECISION_DOCS_JSON || "[]");
 
 const files = Array.isArray(tree.files) ? tree.files : [];
 const topPaths = files.slice(0, 20).map((file) => file.path);
@@ -72,126 +74,58 @@ const activeSurface = files
   .map((file) => file.path)
   .sort();
 const repo = job.repo || (job.scope_json && job.scope_json.repo) || null;
-const desiredActivationDoc = [
-  "# OpenClaw APS Activation",
-  "",
-  "This is the live persistent setup for the current Founderos async worker path:",
-  "",
-  "- OpenClaw stays on the droplet as the private worker habitat.",
-  "- ChatGPT remains the public conversational interface.",
-  "- APS stays on Vercel as the public control plane and authority boundary.",
-  "- OpenClaw uses `FOUNDEROS_WRITE_KEY` for public APS reads and submits when needed.",
-  "- OpenClaw uses `FOUNDEROS_WORKER_KEY` for worker-only orchestration claim, heartbeat, complete, and fail calls.",
-  "",
-  "Do not give OpenClaw the GitHub App private key or Supabase service-role key directly.",
-  "",
-  "## What this gives you",
-  "",
-  "1. ChatGPT can submit async jobs through public APS.",
-  "2. OpenClaw can claim those jobs privately from the VM.",
-  "3. APS keeps auth, policy, witness logging, and GitHub write boundaries server-side.",
-  "4. The worker loop can keep running even when the laptop terminal is closed.",
-  "",
-  "## VM env vars",
-  "",
-  "OpenClaw on the droplet should have:",
-  "",
-  "- `FOUNDEROS_BASE_URL`",
-  "- `FOUNDEROS_WRITE_KEY`",
-  "- `FOUNDEROS_WORKER_KEY`",
-  "- `FOUNDEROS_WORKER_ID`",
-  "",
-  "Recommended values:",
-  "",
-  "- `FOUNDEROS_BASE_URL=https://founderos-alpha.vercel.app`",
-  "- `FOUNDEROS_WRITE_KEY=<same value configured in Vercel for GPT/user APS auth>`",
-  "- `FOUNDEROS_WORKER_KEY=<worker-only key configured in Vercel>`",
-  "- `FOUNDEROS_WORKER_ID=openclaw-vm`",
-  "",
-  "## Droplet setup",
-  "",
-  "Create a small env file on the droplet:",
-  "",
-  "```bash",
-  "mkdir -p /root/.config/founderos",
-  "cat >/root/.config/founderos/aps.env <<'EOF'",
-  "FOUNDEROS_BASE_URL=https://founderos-alpha.vercel.app",
-  "FOUNDEROS_WRITE_KEY=REPLACE_ME",
-  "FOUNDEROS_WORKER_KEY=REPLACE_ME",
-  "FOUNDEROS_WORKER_ID=openclaw-vm",
-  "EOF",
-  "chmod 600 /root/.config/founderos/aps.env",
-  "```",
-  "",
-  "## Helper script",
-  "",
-  "This repo includes a helper at:",
-  "",
-  "- [`services/openclaw/aps-client.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/aps-client.sh)",
-  "",
-  "It supports:",
-  "",
-  "- `capabilities`",
-  "- `plan`",
-  "- `repo-file`",
-  "- `repo-tree`",
-  "- `submit`",
-  "- `job-status`",
-  "- `claim`",
-  "- `heartbeat`",
-  "- `complete`",
-  "- `fail`",
-  "",
-  "## Worker loop startup",
-  "",
-  "From the droplet clone of this repo:",
-  "",
-  "```bash",
-  "cd /root/.openclaw/workspace/founderos",
-  "set -a",
-  "source /root/.config/founderos/aps.env",
-  "set +a",
-  "nohup bash services/openclaw/worker-loop.sh >/root/founderos-worker.log 2>&1 &",
-  "```",
-  "",
-  "## Verification",
-  "",
-  "Public APS auth check:",
-  "",
-  "```bash",
-  "bash services/openclaw/aps-client.sh capabilities",
-  "```",
-  "",
-  "Worker claim check:",
-  "",
-  "```bash",
-  "bash services/openclaw/aps-client.sh claim",
-  "```",
-  "",
-  "Async job verification:",
-  "",
-  "1. Submit a job through `orchestrate/submit`.",
-  "2. Wait for the worker loop to claim it.",
-  "3. Poll `orchestrate/jobs/{job_id}` for durable status and result.",
-  "",
-  "## How execution stays safe",
-  "",
-  "- APS checks the repo allowlist.",
-  "- APS rejects protected paths.",
-  "- Durable writes still require governed APS execution.",
-  "- Autonomous changes should end in reviewable PRs rather than direct pushes to `main`.",
-  "",
-  "## Daily operating model",
-  "",
-  "Use Founderos like this:",
-  "",
-  "1. Submit a bounded async job from ChatGPT through public APS.",
-  "2. Let OpenClaw claim and inspect privately on the VM.",
-  "3. Review the returned proposal or write set.",
-  "4. Approve the resulting PR through GitHub when the change is acceptable.",
-  "",
-  "That is the current safe path from chat intent to bounded self-improvement.",
-].join("\n");
+
+function readDecisionField(markdown, label) {
+  const match = markdown.match(new RegExp(`^- \\*\\*${label}:\\*\\*\\s*(.+)$`, "mi"));
+  return match ? match[1].trim() : null;
+}
+
+function summarizeParagraph(markdown, heading) {
+  const pattern = new RegExp(`^## ${heading}\\n([\\s\\S]*?)(\\n## |$)`, "m");
+  const match = markdown.match(pattern);
+  if (!match) {
+    return null;
+  }
+  return match[1]
+    .trim()
+    .split(/\r?\n\r?\n/)[0]
+    .replace(/\r?\n/g, " ")
+    .trim();
+}
+
+function buildDecisionContext(indexJson, docs) {
+  const ledgerFiles = Array.isArray(indexJson.files) ? indexJson.files : [];
+  const decisions = Array.isArray(docs) ? docs : [];
+  const parsed = decisions
+    .filter((item) => item && typeof item.path === "string" && typeof item.content === "string")
+    .map((item) => {
+      const status = readDecisionField(item.content, "Status");
+      const decisionId = readDecisionField(item.content, "Decision ID");
+      const date = readDecisionField(item.content, "Date");
+      const domain = readDecisionField(item.content, "Domain");
+      const summary = readDecisionField(item.content, "Summary");
+      return {
+        path: item.path,
+        decision_id: decisionId,
+        status,
+        date,
+        domain,
+        summary,
+        rationale: summarizeParagraph(item.content, "Rationale"),
+        decision: summarizeParagraph(item.content, "Decision"),
+      };
+    });
+
+  const activeDecisions = parsed.filter((item) => item.status === "active");
+  return {
+    ledger_path: "memory/decisions",
+    ledger_file_count: ledgerFiles.length,
+    active_decision_count: activeDecisions.length,
+    active_decisions: activeDecisions,
+    active_decision_ids: activeDecisions.map((item) => item.decision_id).filter(Boolean),
+    active_summaries: activeDecisions.map((item) => item.summary).filter(Boolean),
+  };
+}
 
 function hasLiveWorkerAuthMarkers(text) {
   return (
@@ -202,14 +136,19 @@ function hasLiveWorkerAuthMarkers(text) {
   );
 }
 
-function buildImprovementProposal({ repo, activationText, desiredActivationDoc }) {
+function buildImprovementProposal({ repo, activationText, decisionContext }) {
+  const activeDecisionIds = Array.isArray(decisionContext.active_decision_ids)
+    ? decisionContext.active_decision_ids
+    : [];
+  const hasUnifiedReasoningDecision = activeDecisionIds.includes("DEC-0001");
+
   if (!hasLiveWorkerAuthMarkers(activationText)) {
     return {
       kind: "docs_alignment",
       title: "Update OpenClaw activation docs for the live async worker loop",
       priority: "high",
       rationale:
-        "The current activation doc still describes the older one-key flow and does not document the live worker-authenticated async orchestration path.",
+        "The current activation doc still describes an older flow and does not document the live worker-authenticated async orchestration path clearly enough.",
       risk_level: "low",
       target_area: "operator-facing activation and recovery documentation",
       target_files: [
@@ -229,78 +168,69 @@ function buildImprovementProposal({ repo, activationText, desiredActivationDoc }
       ],
       expected_outcome:
         "The repo documents the live async worker path accurately, reducing recovery risk and making the system easier for the agent to reason about.",
-      candidate_write_set: {
-        mode: "exact_write_set_candidate",
-        repo,
-        branch_name: "codex/update-worker-activation-docs",
-        base_branch: "main",
-        title: "Document async worker activation for Founderos",
-        rationale:
-          "The live system now uses separate public and worker auth lanes, so the activation docs should reflect the actual operating model.",
-        files: [
-          {
-            path: "docs/OPENCLAW_APS_ACTIVATION.md",
-            action: "update",
-            content: desiredActivationDoc,
-            intent: "Describe the two-key APS + worker activation path and verification loop.",
-          },
-        ],
-      },
+    };
+  }
+
+  if (hasUnifiedReasoningDecision) {
+    return {
+      kind: "decision_context_follow_through",
+      title: "Carry active decision context into broader worker inspection inputs",
+      priority: "high",
+      rationale:
+        "The active unified-reasoning decision says Founderos should operate as one continuous system identity, so worker recommendations should keep incorporating shared state objects instead of reasoning from isolated docs alone.",
+      risk_level: "low",
+      target_area: "worker inspection scope and structured recommendation context",
+      target_files: [
+        "services/openclaw/worker-loop.sh",
+        "docs/FIRST_STATE_OF_THE_UNION.md",
+        "docs/DECISION_LEDGER.md",
+      ],
+      proposed_changes: [
+        "Inspect the state-of-the-union snapshot alongside the decision ledger during worker runs.",
+        "Expose a compact shared-context section in the worker result so later bounded improvements can key off both system state and active decisions.",
+        "Keep recommendation logic grounded in active decisions rather than repeating stale local suggestions.",
+      ],
+      acceptance_criteria: [
+        "Worker results include active decision context and a small shared-context summary.",
+        "The next recommendation references active system decisions when they exist.",
+        "The patch stays inside the current bounded worker and docs surface.",
+      ],
+      expected_outcome:
+        "The worker keeps building on durable shared reasoning context instead of treating each inspection run as a mostly stateless snapshot.",
     };
   }
 
   return {
-      kind: "safe_improvement_proposal",
-      title: "Tighten worker recommendation freshness and add regression coverage",
-      priority: "high",
-      rationale:
-        "The worker should stop repeating already-landed docs recommendations and instead return the next real bounded improvement.",
-      risk_level: "low",
-      target_area: "services/openclaw worker recommendation logic and regression coverage",
-      target_files: [
-        "services/openclaw/worker-loop.sh",
-        "tests/founderos-v1-contract.test.mjs",
-      ],
-      proposed_changes: [
-        "Detect when the live worker-auth docs markers are already present.",
-        "Suppress the stale docs-alignment recommendation in that state.",
-        "Add regression coverage for recommendation freshness in the active test suite.",
-      ],
-      acceptance_criteria: [
-        "When the activation doc already contains live worker-auth markers, the worker does not recommend the docs-alignment fix again.",
-        "The returned bounded proposal points at worker-loop freshness logic and regression coverage.",
-        "The change stays within the current APS boundary and avoids protected paths.",
-      ],
-      expected_outcome:
-        "Founderos recommends the next real low-risk self-improvement instead of repeating stale docs work.",
-      candidate_write_set: {
-        mode: "proposal_only",
-        repo,
-        branch_name: "codex/worker-recommendation-freshness",
-        base_branch: "main",
-        title: "Improve worker recommendation freshness for Founderos",
-        rationale:
-          "Once the worker-auth docs fix has landed, the worker should recommend the next bounded improvement instead of repeating stale docs work.",
-        files: [
-          {
-            path: "services/openclaw/worker-loop.sh",
-            action: "update",
-            intent: "Make recommendation selection freshness-aware when docs markers are already present.",
-          },
-          {
-            path: "tests/founderos-v1-contract.test.mjs",
-            action: "update",
-            intent: "Add regression coverage for recommendation freshness.",
-          },
-        ],
-      },
-    };
+    kind: "safe_improvement_proposal",
+    title: "Expand shared reasoning context beyond the repo entry docs",
+    priority: "medium",
+    rationale:
+      "When no active bootstrap decision is detected, the next safe improvement is to widen worker inspection inputs just enough to improve recommendation quality without touching protected APS paths.",
+    risk_level: "low",
+    target_area: "worker inspection scope",
+    target_files: [
+      "services/openclaw/worker-loop.sh",
+      "docs/FOUNDEROS_SYSTEM_SPEC.md",
+    ],
+    proposed_changes: [
+      "Add one more bounded shared-state input to worker inspections.",
+      "Surface that context in the structured result.",
+      "Use the added context to improve the next bounded recommendation.",
+    ],
+    acceptance_criteria: [
+      "Worker recommendations cite the additional shared context they used.",
+      "The patch remains bounded and reviewable.",
+    ],
+    expected_outcome:
+      "Worker output becomes less stateless and more grounded in durable repo context.",
+  };
 }
 
+const decisionContext = buildDecisionContext(decisionsIndex, decisionDocs);
 const improvementProposal = buildImprovementProposal({
   repo,
   activationText,
-  desiredActivationDoc,
+  decisionContext,
 });
 const selfState = {
   identity: {
@@ -329,15 +259,16 @@ const selfState = {
 };
 
 const result = {
-  summary: "Initial worker self-state inspection completed.",
+  summary: "Worker inspection completed with bootstrap decision context.",
   result: {
     repo,
     file_count: files.length,
     top_paths: topPaths,
     recommended_next_action:
-      "Review the bounded safe improvement proposal and promote it into a PR-ready exact write set.",
+      "Review the bounded next-improvement proposal and keep it aligned with the active decision ledger.",
     readme_excerpt: readmeLines,
     activation_doc_excerpt: activationLines,
+    decision_context: decisionContext,
     self_state: selfState,
     suggested_next_improvement: improvementProposal,
   },
@@ -349,7 +280,7 @@ fs.writeFileSync(targetPath, JSON.stringify(result));
 
 inspect_job() {
   local claimed_json="$1"
-  local job_id repo branch tree_json readme_json activation_doc_json payload_file
+  local job_id repo branch tree_json readme_json activation_doc_json decisions_index_json payload_file decision_docs_json decision_paths
 
   job_id="$(printf '%s' "${claimed_json}" | json_field 'data.job.id')"
   repo="$(printf '%s' "${claimed_json}" | json_field 'data.job.repo || ""')"
@@ -360,10 +291,10 @@ inspect_job() {
     return
   fi
 
-  post_status "${job_id}" "inspecting" "Reading repo tree for ${repo}" 0.2
+  post_status "${job_id}" "inspecting" "Reading repo tree for ${repo}" 0.15
   tree_json="$("${CLIENT}" repo-tree "${repo}" "${branch}" "" 200)"
 
-  post_status "${job_id}" "planning" "Reading README for ${repo}" 0.6
+  post_status "${job_id}" "planning" "Reading README and activation docs for ${repo}" 0.45
   if readme_json="$("${CLIENT}" repo-file "${repo}" "README.md" "${branch}" 2>/dev/null)"; then
     :
   else
@@ -376,13 +307,57 @@ inspect_job() {
     activation_doc_json='{"ok":false,"content":null}'
   fi
 
+  post_status "${job_id}" "planning" "Reading bootstrap decision ledger for ${repo}" 0.7
+  if decisions_index_json="$("${CLIENT}" repo-tree "${repo}" "${branch}" "memory/decisions" 50 2>/dev/null)"; then
+    :
+  else
+    decisions_index_json='{"ok":false,"files":[]}'
+  fi
+
+  decision_paths="$(printf '%s' "${decisions_index_json}" | node -e '
+const fs = require("fs");
+const input = fs.readFileSync(0, "utf8");
+const data = input ? JSON.parse(input) : {};
+const files = Array.isArray(data.files) ? data.files : [];
+const paths = files
+  .map((item) => item && item.path)
+  .filter((path) => typeof path === "string" && /^memory\/decisions\/.+\.md$/.test(path) && path !== "memory/decisions/README.md");
+process.stdout.write(paths.join("\n"));
+' 2>/dev/null || true)"
+
+  decision_docs_json="[]"
+  if [[ -n "${decision_paths}" ]]; then
+    decision_docs_json="$(
+      REPO="${repo}" BRANCH="${branch}" DECISION_PATHS="${decision_paths}" CLIENT_PATH="${CLIENT}" node -e '
+const { execFileSync } = require("child_process");
+const repo = process.env.REPO;
+const branch = process.env.BRANCH;
+const client = process.env.CLIENT_PATH;
+const paths = (process.env.DECISION_PATHS || "").split(/\n/).filter(Boolean);
+const docs = [];
+for (const path of paths) {
+  try {
+    const raw = execFileSync(client, ["repo-file", repo, path, branch], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const parsed = JSON.parse(raw);
+    docs.push({ path, content: typeof parsed.content === "string" ? parsed.content : "" });
+  } catch (_err) {
+    docs.push({ path, content: "" });
+  }
+}
+process.stdout.write(JSON.stringify(docs));
+' 2>/dev/null
+    )"
+  fi
+
   payload_file="$(mktemp)"
   FOUNDEROS_TREE_JSON="${tree_json}" \
   FOUNDEROS_README_JSON="${readme_json}" \
   FOUNDEROS_ACTIVATION_DOC_JSON="${activation_doc_json}" \
+  FOUNDEROS_DECISIONS_INDEX_JSON="${decisions_index_json}" \
+  FOUNDEROS_DECISION_DOCS_JSON="${decision_docs_json}" \
   build_result_payload "${claimed_json}" "${payload_file}"
 
-  post_status "${job_id}" "write_set_ready" "Inspection summary prepared" 0.9
+  post_status "${job_id}" "write_set_ready" "Inspection summary prepared with decision context" 0.9
   if [[ ! -s "${payload_file}" ]]; then
     echo "Worker payload generation failed for ${job_id}" >&2
     fail_job "${job_id}" "${payload_file}"
