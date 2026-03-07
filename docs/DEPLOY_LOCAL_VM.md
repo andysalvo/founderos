@@ -5,7 +5,7 @@ This runs the active Founderos APS API on the same VM as OpenClaw instead of Ver
 ## Why use this mode
 
 - Secrets stay local on the VM.
-- OpenClaw still gets only one narrow APS key.
+- OpenClaw gets a narrow public APS key plus a separate worker key.
 - GitHub and Supabase credentials stay behind APS.
 - You remove Vercel from the request path.
 
@@ -18,7 +18,9 @@ mkdir -p /root/.config/founderos
 cat >/root/.config/founderos/local-aps.env <<'EOF'
 FOUNDEROS_HOST=127.0.0.1
 FOUNDEROS_PORT=8787
+FOUNDEROS_PUBLIC_WRITE_KEY=REPLACE_ME
 FOUNDEROS_WRITE_KEY=REPLACE_ME
+FOUNDEROS_WORKER_KEY=REPLACE_ME
 ALLOWED_REPOS=andysalvo/founderos
 GITHUB_APP_ID=REPLACE_ME
 GITHUB_INSTALLATION_ID=REPLACE_ME
@@ -54,7 +56,9 @@ Create `/root/.config/founderos/aps.env`:
 ```bash
 cat >/root/.config/founderos/aps.env <<'EOF'
 FOUNDEROS_BASE_URL=http://127.0.0.1:8787
+FOUNDEROS_PUBLIC_WRITE_KEY=REPLACE_ME
 FOUNDEROS_WRITE_KEY=REPLACE_ME
+FOUNDEROS_WORKER_KEY=REPLACE_ME
 EOF
 chmod 600 /root/.config/founderos/aps.env
 ```
@@ -78,6 +82,7 @@ chmod +x /usr/local/bin/aps
 aps capabilities | jq '.ok'
 aps repo-tree andysalvo/founderos main docs 10 | jq '.ok'
 aps repo-file andysalvo/founderos docs/OPENCLAW_APS_ACTIVATION.md main | jq '.ok'
+aps claim | jq '.ok'
 ```
 
 All three should return `true`.

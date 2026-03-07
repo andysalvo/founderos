@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { createHash } from "node:crypto";
 
 const require = createRequire(import.meta.url);
+const { hashJson } = require("../api/_lib/founderos-v1.js");
 
 const healthHandler = require("../api/founderos/health.js");
 const capabilitiesHandler = require("../api/founderos/capabilities.js");
@@ -14,6 +14,7 @@ const repoFileHandler = require("../api/founderos/repo/file.js");
 const repoTreeHandler = require("../api/founderos/repo/tree.js");
 const freezeWriteSetHandler = require("../api/founderos/commit/freeze-write-set.js");
 const commitExecuteHandler = require("../api/founderos/commit/execute.js");
+const commitMergePrHandler = require("../api/founderos/commit/merge-pr.js");
 const commitAutoExecuteHandler = require("../api/founderos/commit/auto-execute.js");
 const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit.js");
 const orchestrateJobStatusHandler = require("../api/founderos/orchestrate/jobs/[job_id].js");
@@ -113,6 +114,7 @@ test("OpenAPI surface exposes only the public APS contract", async () => {
     "/api/founderos/repo/tree:",
     "/api/founderos/commit/freeze-write-set:",
     "/api/founderos/commit/execute:",
+    "/api/founderos/commit/merge-pr:",
     "/api/founderos/orchestrate/submit:",
     "/api/founderos/orchestrate/jobs/{job_id}:",
   ]) {
@@ -138,20 +140,28 @@ test("health handler matches the documented shape", async () => {
   const response = await invoke(healthHandler, { method: "GET", headers: {} });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(Object.keys(response.json).sort(), ["ok", "service", "timestamp", "version"]);
+  assert.deepEqual(Object.keys(response.json).sort(), [
+    "ok",
+    "runtime",
+    "service",
+    "timestamp",
+    "version",
+  ]);
   assert.equal(response.json.ok, true);
+  assert.equal(typeof response.json.runtime, "object");
 });
 
-test("capabilities is public and returns only the nine public APS endpoints", async () => {
+test("capabilities is public and returns the governed public APS endpoints", async () => {
   process.env.ALLOWED_REPOS = "owner/repo";
   process.env.FOUNDEROS_WORKER_KEY = "worker-key";
 
   const response = await invoke(capabilitiesHandler, { method: "GET", headers: {} });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.endpoints.length, 10);
+  assert.equal(response.json.endpoints.length, 11);
   assert.equal(response.json.openapi.path, "docs/openapi.founderos.yaml");
   assert.equal(response.json.worker_auth.header, "x-founderos-worker-key");
+  assert.equal(typeof response.json.runtime, "object");
   assert.deepEqual(
     response.json.endpoints.map((item) => item.path),
     [
@@ -163,9 +173,21 @@ test("capabilities is public and returns only the nine public APS endpoints", as
       "/api/founderos/repo/tree",
       "/api/founderos/commit/freeze-write-set",
       "/api/founderos/commit/execute",
+      "/api/founderos/commit/merge-pr",
       "/api/founderos/orchestrate/submit",
       "/api/founderos/orchestrate/jobs/{job_id}",
     ]
+  );
+  assert.equal(response.json.boundaries.governed_pr_merge_available, true);
+  assert.equal(response.json.boundaries.policy_bearing_artifact_classification, true);
+  assert.equal(response.json.boundaries.deterministic_mutation_translation_required, true);
+  assert.ok(
+    response.json.policy_bearing_artifacts.some(
+      (item) =>
+        item.path === "memory/decisions/" &&
+        item.artifact_type === "authority_shaping_decision_artifact" &&
+        item.enforcement === "review_required"
+    )
   );
 });
 
@@ -202,7 +224,7 @@ test("capabilities check mirrors capabilities over POST", async () => {
 
   assert.equal(authorized.statusCode, 200);
   assert.equal(authorized.json.ok, true);
-  assert.equal(authorized.json.endpoints.length, 10);
+  assert.equal(authorized.json.endpoints.length, 11);
   assert.equal(authorized.json.endpoints[2].path, "/api/founderos/capabilities/check");
 });
 
@@ -261,6 +283,23 @@ test("commit.auto-execute requires the worker key", async () => {
 
   assert.equal(response.statusCode, 401);
   assert.equal(response.json.error, "worker_unauthorized");
+});
+
+test("commit.merge-pr requires explicit authorization", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+
+  const response = await invoke(commitMergePrHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      repo: "owner/repo",
+      pull_number: 12,
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "authorization_required");
 });
 
 test("commit.freeze-write-set fails closed when artifact storage is not configured", async () => {
@@ -347,6 +386,24 @@ test("repo.file rejects repos outside the allowlist before external calls", asyn
   assert.equal(response.json.error, "repo_not_allowed");
 });
 
+test("repo.file rejects unsafe refs before external calls", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+
+  const response = await invoke(repoFileHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      repo: "owner/repo",
+      path: "README.md",
+      ref: "main\ncurl bad",
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "ref_invalid");
+});
+
 test("repo.tree validates limit input before external calls", async () => {
   process.env.FOUNDEROS_WRITE_KEY = "test-key";
   process.env.ALLOWED_REPOS = "owner/repo";
@@ -362,6 +419,27 @@ test("repo.tree validates limit input before external calls", async () => {
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json.error, "limit_invalid");
+});
+
+test("precommit plan marks policy-bearing artifacts explicitly", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+
+  const response = await invoke(precommitPlanHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      user_request: "Review the constitutional docs",
+      scope: {
+        repo: "owner/repo",
+        branch: "main",
+        allowed_paths: ["memory/decisions/2026-03-06-unified-reasoning-with-one-system.md"],
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.ok, true);
+  assert.match(response.json.artifact.warnings[0], /policy-bearing artifacts/i);
 });
 
 test("precommit plan stays proposal-only", async () => {
@@ -414,7 +492,7 @@ test("commit.execute rejects protected paths before any external call", async ()
       authorization: {
         plan_artifact_id: "plan_123",
         plan_artifact_hash: "artifact_hash",
-        write_set_hash: createHash("sha256").update(JSON.stringify(writeSet)).digest("hex"),
+        write_set_hash: hashJson(writeSet),
         authorized_by: "tester",
       },
     },
@@ -422,6 +500,42 @@ test("commit.execute rejects protected paths before any external call", async ()
 
   assert.equal(response.statusCode, 403);
   assert.equal(response.json.error, "protected_path");
+});
+
+test("commit.execute rejects unsafe branch names before any external call", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+
+  const writeSet = {
+    branch_name: "codex/test\nrm -rf /",
+    base_branch: "main",
+    title: "Test update",
+    repo: "owner/repo",
+    files: [
+      {
+        path: "docs/notes.md",
+        action: "create",
+        content: "hello",
+      },
+    ],
+  };
+
+  const response = await invoke(commitExecuteHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      write_set: writeSet,
+      authorization: {
+        plan_artifact_id: "plan_123",
+        plan_artifact_hash: "artifact_hash",
+        write_set_hash: hashJson(writeSet),
+        authorized_by: "tester",
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "branch_name_required");
 });
 
 test("commit.execute fails closed when witness storage is not configured", async () => {
@@ -455,7 +569,7 @@ test("commit.execute fails closed when witness storage is not configured", async
       authorization: {
         plan_artifact_id: "plan_123",
         plan_artifact_hash: "artifact_hash",
-        write_set_hash: createHash("sha256").update(JSON.stringify(writeSet)).digest("hex"),
+        write_set_hash: hashJson(writeSet),
         authorized_by: "tester",
       },
     },
@@ -623,7 +737,7 @@ test("large write sets can be frozen and executed from server-canonical payloads
 
   assert.equal(freezeResponse.statusCode, 200);
   assert.equal(freezeResponse.json.ok, true);
-  assert.equal(freezeResponse.json.artifact.write_set_hash, createHash("sha256").update(JSON.stringify(writeSet)).digest("hex"));
+  assert.equal(freezeResponse.json.artifact.write_set_hash, hashJson(writeSet));
 
   const executeResponse = await invoke(freshCommitExecuteHandler, {
     method: "POST",
@@ -654,7 +768,381 @@ test("large write sets can be frozen and executed from server-canonical payloads
   assert.ok(
     storage.witness_events.some((row) => row.type === "commit.execution_authorized")
   );
+  const executionWitness = storage.witness_events.find(
+    (row) => row.type === "commit.execution_authorized"
+  );
+  assert.equal(executionWitness.payload.actor_lane, "public");
+  assert.equal(executionWitness.payload.actor_subject_type, "human_directed");
+  assert.ok("runtime_commit_sha" in executionWitness.payload);
   assert.ok(
     githubCalls.some((call) => call.method === "POST" && call.path.endsWith("/pulls"))
+  );
+});
+
+test("governed PR merge is squash-only, green-check gated, and witness-logged", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+  process.env.GITHUB_APP_ID = "123";
+  process.env.GITHUB_INSTALLATION_ID = "456";
+  process.env.GITHUB_APP_PRIVATE_KEY = "test-private-key";
+  process.env.SUPABASE_URL = "https://supabase.example";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+
+  const storage = {
+    witness_events: [],
+  };
+  const githubCalls = [];
+
+  const supabaseMock = {
+    buildWitnessEvent(type, actor, payload, artifactId, commitId) {
+      return {
+        id: `witness-${storage.witness_events.length + 1}`,
+        ts: new Date().toISOString(),
+        type,
+        commit_id: commitId || null,
+        artifact_id: artifactId || null,
+        actor,
+        payload,
+      };
+    },
+    getSupabaseConfig() {
+      return { url: "https://supabase.example", serviceRoleKey: "service-role-key" };
+    },
+    async insertRow(_config, table, row) {
+      storage[table].push(row);
+      return row;
+    },
+    async selectRows() {
+      return [];
+    },
+  };
+
+  const githubMock = {
+    encodePathForGitHub(path) {
+      return path.split("/").map(encodeURIComponent).join("/");
+    },
+    async getInstallationToken() {
+      return "installation-token";
+    },
+    async githubRequest(_token, method, path, body) {
+      githubCalls.push({ method, path, body });
+      if (method === "GET" && path.endsWith("/pulls/12")) {
+        return {
+          number: 12,
+          state: "open",
+          draft: false,
+          merged: false,
+          mergeable: true,
+          mergeable_state: "clean",
+          html_url: "https://github.com/owner/repo/pull/12",
+          base: { ref: "main" },
+          head: { ref: "codex/test", sha: "a".repeat(40) },
+        };
+      }
+      if (method === "GET" && path.endsWith("/branches/main")) {
+        return {
+          protected: true,
+          protection: {
+            required_status_checks: {
+              contexts: ["ci/test"],
+            },
+          },
+        };
+      }
+      if (method === "GET" && path.endsWith(`/commits/${"a".repeat(40)}/status`)) {
+        return {
+          state: "success",
+          statuses: [{ context: "ci/test", state: "success" }],
+        };
+      }
+      if (method === "GET" && path.includes(`/commits/${"a".repeat(40)}/check-runs`)) {
+        return {
+          total_count: 1,
+          check_runs: [{ name: "ci/test", status: "completed", conclusion: "success" }],
+        };
+      }
+      if (method === "PUT" && path.endsWith("/pulls/12/merge")) {
+        return { merged: true, sha: "b".repeat(40), message: "Pull Request successfully merged" };
+      }
+      throw new Error(`unexpected github request: ${method} ${path}`);
+    },
+  };
+
+  const commitExecution = loadFreshCommonJs("../api/_lib/commit-execution.js", {
+    "../api/_lib/supabase.js": supabaseMock,
+    "../api/_lib/github.js": githubMock,
+  });
+  const freshMergeHandler = loadFreshCommonJs("../api/founderos/commit/merge-pr.js", {
+    "../api/_lib/commit-execution.js": commitExecution,
+  });
+
+  const response = await invoke(freshMergeHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      repo: "owner/repo",
+      pull_number: 12,
+      authorization: {
+        action: "merge_pull_request",
+        authorized_by: "tester",
+        expected_head_sha: "a".repeat(40),
+        expected_base_branch: "main",
+        merge_method: "squash",
+        actor_lane: "public",
+        actor_subject_type: "human_directed",
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.ok, true);
+  assert.equal(response.json.execution.merge_method, "squash");
+  assert.equal(response.json.execution.merged, true);
+  assert.ok(
+    storage.witness_events.some((row) => row.type === "commit.pr_merge_authorized")
+  );
+  assert.ok(storage.witness_events.some((row) => row.type === "commit.pr_merged"));
+  const authorizationWitness = storage.witness_events.find(
+    (row) => row.type === "commit.pr_merge_authorized"
+  );
+  assert.equal(authorizationWitness.payload.policy_details.checks.checks_green, true);
+  assert.equal(authorizationWitness.payload.actor_lane, "public");
+  const mergeCall = githubCalls.find(
+    (call) => call.method === "PUT" && call.path.endsWith("/pulls/12/merge")
+  );
+  assert.equal(mergeCall.body.merge_method, "squash");
+});
+
+test("governed PR merge fails closed when checks are not green", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+  process.env.GITHUB_APP_ID = "123";
+  process.env.GITHUB_INSTALLATION_ID = "456";
+  process.env.GITHUB_APP_PRIVATE_KEY = "test-private-key";
+  process.env.SUPABASE_URL = "https://supabase.example";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+
+  const storage = {
+    witness_events: [],
+  };
+
+  const supabaseMock = {
+    buildWitnessEvent(type, actor, payload, artifactId, commitId) {
+      return {
+        id: `witness-${storage.witness_events.length + 1}`,
+        ts: new Date().toISOString(),
+        type,
+        commit_id: commitId || null,
+        artifact_id: artifactId || null,
+        actor,
+        payload,
+      };
+    },
+    getSupabaseConfig() {
+      return { url: "https://supabase.example", serviceRoleKey: "service-role-key" };
+    },
+    async insertRow(_config, table, row) {
+      storage[table].push(row);
+      return row;
+    },
+    async selectRows() {
+      return [];
+    },
+  };
+
+  const githubMock = {
+    encodePathForGitHub(path) {
+      return path.split("/").map(encodeURIComponent).join("/");
+    },
+    async getInstallationToken() {
+      return "installation-token";
+    },
+    async githubRequest(_token, method, path) {
+      if (method === "GET" && path.endsWith("/pulls/12")) {
+        return {
+          number: 12,
+          state: "open",
+          draft: false,
+          merged: false,
+          mergeable: true,
+          mergeable_state: "unstable",
+          html_url: "https://github.com/owner/repo/pull/12",
+          base: { ref: "main" },
+          head: { ref: "codex/test", sha: "a".repeat(40) },
+        };
+      }
+      if (method === "GET" && path.endsWith("/branches/main")) {
+        return {
+          protected: true,
+          protection: {
+            required_status_checks: {
+              contexts: ["ci/test"],
+            },
+          },
+        };
+      }
+      if (method === "GET" && path.endsWith(`/commits/${"a".repeat(40)}/status`)) {
+        return {
+          state: "pending",
+          statuses: [{ context: "ci/test", state: "pending" }],
+        };
+      }
+      if (method === "GET" && path.includes(`/commits/${"a".repeat(40)}/check-runs`)) {
+        return {
+          total_count: 1,
+          check_runs: [{ name: "ci/test", status: "completed", conclusion: "failure" }],
+        };
+      }
+      throw new Error(`unexpected github request: ${method} ${path}`);
+    },
+  };
+
+  const commitExecution = loadFreshCommonJs("../api/_lib/commit-execution.js", {
+    "../api/_lib/supabase.js": supabaseMock,
+    "../api/_lib/github.js": githubMock,
+  });
+  const freshMergeHandler = loadFreshCommonJs("../api/founderos/commit/merge-pr.js", {
+    "../api/_lib/commit-execution.js": commitExecution,
+  });
+
+  const response = await invoke(freshMergeHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      repo: "owner/repo",
+      pull_number: 12,
+      authorization: {
+        action: "merge_pull_request",
+        authorized_by: "tester",
+        expected_head_sha: "a".repeat(40),
+        expected_base_branch: "main",
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json.error, "checks_not_green");
+  assert.ok(
+    storage.witness_events.some(
+      (row) =>
+        row.type === "commit.pr_merge_rejected" &&
+        row.payload.rejection_reason === "checks_not_green"
+    )
+  );
+});
+
+test("orchestration lifecycle records worker runtime provenance and lane attribution", async () => {
+  process.env.SUPABASE_URL = "https://supabase.example";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+
+  const storage = {
+    plan_artifacts: [],
+    orchestration_jobs: [],
+    orchestration_events: [],
+    witness_events: [],
+  };
+
+  const supabaseMock = {
+    buildWitnessEvent(type, actor, payload, artifactId, commitId) {
+      return {
+        id: `witness-${storage.witness_events.length + 1}`,
+        ts: new Date().toISOString(),
+        type,
+        commit_id: commitId || null,
+        artifact_id: artifactId || null,
+        actor,
+        payload,
+      };
+    },
+    getSupabaseConfig() {
+      return { url: "https://supabase.example", serviceRoleKey: "service-role-key" };
+    },
+    async insertRows(_config, table, rows) {
+      storage[table].push(...rows);
+      return rows;
+    },
+    async insertRow(_config, table, row) {
+      storage[table].push(row);
+      return row;
+    },
+    async patchRows(_config, table, filters, patch) {
+      const rows = storage[table].filter((row) =>
+        Object.entries(filters).every(([key, value]) =>
+          typeof value === "string" && value.startsWith("eq.")
+            ? row[key] === value.slice(3)
+            : row[key] === value
+        )
+      );
+      for (const row of rows) {
+        Object.assign(row, patch);
+      }
+      return rows;
+    },
+    async selectRows(_config, table, filters) {
+      const rows = storage[table] || [];
+      return rows.filter((row) =>
+        Object.entries(filters || {}).every(([key, value]) =>
+          typeof value === "string" && value.startsWith("eq.")
+            ? row[key] === value.slice(3)
+            : row[key] === value
+        )
+      );
+    },
+  };
+
+  const orchestration = loadFreshCommonJs("../api/_lib/orchestration.js", {
+    "../api/_lib/supabase.js": supabaseMock,
+  });
+
+  const submitted = await orchestration.createOrchestrationJob({
+    user_request: "Inspect the repo",
+    requested_by: "chatgpt-user",
+    requested_by_lane: "public",
+    requested_by_subject_type: "human_directed",
+    model_identity: "gpt-5",
+    scope: { repo: "owner/repo", branch: "main" },
+  });
+  const claimed = await orchestration.claimNextQueuedJob("openclaw-worker", {
+    worker_runtime: {
+      worker_id: "openclaw-worker",
+      worker_commit_sha: "c".repeat(40),
+      worker_commit_source: "git",
+      worker_version: "loop-1",
+    },
+  });
+  const completed = await orchestration.updateJobLifecycle(submitted.job_id, "openclaw-worker", "completed", {
+    event_type: "job_completed",
+    event_payload: {
+      status: "completed",
+      message: "Finished",
+      progress: 1,
+    },
+    result: {
+      summary: "done",
+    },
+    model_identity: "gpt-5",
+    worker_runtime: {
+      worker_id: "openclaw-worker",
+      worker_commit_sha: "c".repeat(40),
+      worker_commit_source: "git",
+      worker_version: "loop-1",
+    },
+  });
+
+  assert.equal(claimed.claimed_by, "openclaw-worker");
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.result_json.actor_lane, "worker");
+  assert.equal(completed.result_json.worker_runtime.worker_commit_sha, "c".repeat(40));
+  assert.ok("runtime_commit_sha" in completed.result_json);
+  assert.ok(
+    storage.witness_events.some((row) => row.type === "orchestration.job_claimed")
+  );
+  const completionWitness = storage.witness_events.find(
+    (row) => row.type === "orchestration.job_completed"
+  );
+  assert.equal(completionWitness.payload.actor_lane, "worker");
+  assert.equal(
+    completionWitness.payload.worker_runtime.worker_commit_sha,
+    "c".repeat(40)
   );
 });

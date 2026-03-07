@@ -59,6 +59,19 @@ module.exports = async (req, res) => {
       planArtifactHash: typeof body.plan_artifact_hash === "string" ? body.plan_artifact_hash : null,
       witnessType: "commit.auto_execute_authorized",
       docsOnly: true,
+      provenance: {
+        actor_lane: "worker",
+        actor_subject_type: "worker",
+        actor_subject: workerId,
+        job_id: typeof body.job_id === "string" ? body.job_id : null,
+        model_identity:
+          typeof body.model_identity === "string"
+            ? body.model_identity
+            : typeof candidate.model_identity === "string"
+              ? candidate.model_identity
+              : null,
+        worker_runtime: isPlainObject(body.worker_runtime) ? body.worker_runtime : null,
+      },
     });
 
     return sendJson(res, 200, { ok: true, ...executed });

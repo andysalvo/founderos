@@ -10,6 +10,7 @@ const repoFileHandler = require("../api/founderos/repo/file");
 const repoTreeHandler = require("../api/founderos/repo/tree");
 const freezeWriteSetHandler = require("../api/founderos/commit/freeze-write-set");
 const commitExecuteHandler = require("../api/founderos/commit/execute");
+const commitMergePrHandler = require("../api/founderos/commit/merge-pr");
 const commitAutoExecuteHandler = require("../api/founderos/commit/auto-execute");
 const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit");
 const orchestrateClaimHandler = require("../api/founderos/orchestrate/claim");
@@ -30,6 +31,7 @@ const routes = new Map([
   ["POST /api/founderos/repo/tree", repoTreeHandler],
   ["POST /api/founderos/commit/freeze-write-set", freezeWriteSetHandler],
   ["POST /api/founderos/commit/execute", commitExecuteHandler],
+  ["POST /api/founderos/commit/merge-pr", commitMergePrHandler],
   ["POST /api/founderos/commit/auto-execute", commitAutoExecuteHandler],
   ["POST /api/founderos/orchestrate/submit", orchestrateSubmitHandler],
   ["POST /api/founderos/orchestrate/claim", orchestrateClaimHandler],

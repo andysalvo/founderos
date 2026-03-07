@@ -14,7 +14,7 @@ It should point at a public production domain that GPT Actions can reach:
 3. Paste the contents of [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml).
 4. Configure auth as API key auth.
 5. Set header name to `x-founderos-key`.
-6. Set the key value to the exact `FOUNDEROS_WRITE_KEY` configured in Vercel.
+6. Set the key value to `FOUNDEROS_PUBLIC_WRITE_KEY` when present, otherwise `FOUNDEROS_WRITE_KEY`.
 
 ## Suggested GPT instructions
 
@@ -55,6 +55,7 @@ Use this only when the user has approved the exact write set:
 1. Present the exact write set clearly.
 2. Confirm that the user wants that exact write set executed.
 3. Call `commitExecute` only after explicit approval.
+4. If the user later wants APS to merge the resulting PR, call `commitMergePr` only with the explicit PR number, expected head SHA, and base branch the user is authorizing.
 
 ## Current practical recommendation
 
@@ -69,6 +70,6 @@ For the current system, the best GPT behavior is:
 - `GET /api/founderos/capabilities` is public and should work before auth is attached in the session.
 - Use `capabilitiesCheck` to verify GPT Builder is actually sending the API key on authenticated calls.
 - Keep the Builder auth config as `x-founderos-key`.
-- Founderos also tolerates `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` as a compatibility fallback.
+- Founderos also tolerates `Authorization: Bearer <FOUNDEROS_PUBLIC_WRITE_KEY>` or `Authorization: Bearer <FOUNDEROS_WRITE_KEY>` as a compatibility fallback.
 - Do not expose worker-only endpoints in GPT Builder.
 - Do not point GPT Builder at a Vercel preview or deployment URL behind Vercel Authentication.

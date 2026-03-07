@@ -8,14 +8,22 @@ This repo deploys as a minimal Node/Vercel function set from the root `api/` dir
 - `GET /api/founderos/capabilities`
 - `POST /api/founderos/capabilities/check`
 - `POST /api/founderos/precommit/plan`
+- `POST /api/founderos/repo/file`
+- `POST /api/founderos/repo/tree`
+- `POST /api/founderos/commit/freeze-write-set`
 - `POST /api/founderos/commit/execute`
+- `POST /api/founderos/commit/merge-pr`
+- `POST /api/founderos/orchestrate/submit`
+- `GET /api/founderos/orchestrate/jobs/{job_id}`
 
 ## Required environment variables
 
+- `FOUNDEROS_PUBLIC_WRITE_KEY`
+  Preferred public/user API key expected in the `x-founderos-key` header for every authenticated route.
 - `FOUNDEROS_WRITE_KEY`
-  Shared API key expected in the `x-founderos-key` header for every authenticated route.
+  Compatibility fallback for existing GPT Builder or VM clients that still use the older public key name.
 - `ALLOWED_REPOS`
-  Comma-separated GitHub repos allowed for `commit.execute`, for example `owner/repo,owner/repo-two`.
+  Comma-separated GitHub repos allowed for governed APS reads, PR creation, and governed PR merge, for example `owner/repo,owner/repo-two`.
 - `GITHUB_APP_ID`
   GitHub App id used to mint installation tokens server-side.
 - `GITHUB_INSTALLATION_ID`
@@ -23,13 +31,13 @@ This repo deploys as a minimal Node/Vercel function set from the root `api/` dir
 - `GITHUB_APP_PRIVATE_KEY`
   GitHub App private key PEM. Preserve newlines or use escaped `\n`.
 - `SUPABASE_URL`
-  Supabase project URL used for append-only witness writes.
+  Supabase project URL used for append-only witness writes and orchestration provenance.
 - `SUPABASE_SERVICE_ROLE_KEY`
   Supabase service-role key used only on the server for witness writes.
 
 ## Required Supabase schema
 
-Apply [`infra/supabase/witness_events.sql`](/Users/andysalvo_1/Documents/GitHub/founderos/infra/supabase/witness_events.sql) before using `commit.execute`.
+Apply [`infra/supabase/witness_events.sql`](/Users/andysalvo_1/Documents/GitHub/founderos/infra/supabase/witness_events.sql) and [`infra/supabase/orchestration.sql`](/Users/andysalvo_1/Documents/GitHub/founderos/infra/supabase/orchestration.sql) before using governed execution and orchestration routes.
 
 ## Deploy steps
 

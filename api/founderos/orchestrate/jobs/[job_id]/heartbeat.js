@@ -43,6 +43,8 @@ module.exports = async (req, res) => {
         message: typeof body.message === "string" ? body.message.trim() : "",
         progress: typeof body.progress === "number" ? body.progress : null,
       },
+      worker_runtime: isPlainObject(body.worker_runtime) ? body.worker_runtime : null,
+      model_identity: typeof body.model_identity === "string" ? body.model_identity.trim() : null,
     });
 
     if (!updated) {

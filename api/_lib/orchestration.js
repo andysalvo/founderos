@@ -1,5 +1,12 @@
 const { randomUUID } = require("crypto");
-const { buildPlanArtifact, hashJson, isPlainObject, normalizeStringList } = require("./founderos-v1");
+const {
+  buildPlanArtifact,
+  hashJson,
+  isPlainObject,
+  normalizeStringList,
+  validateModelIdentity,
+  validateMutationText,
+} = require("./founderos-v1");
 const {
   buildWitnessEvent,
   getSupabaseConfig,
@@ -8,6 +15,7 @@ const {
   patchRows,
   selectRows,
 } = require("./supabase");
+const { getRuntimeContext } = require("./runtime");
 
 const ACTIVE_JOB_STATUSES = new Set([
   "queued",
@@ -25,22 +33,99 @@ function requireSupabaseConfig() {
   return getSupabaseConfig();
 }
 
+function sanitizeWorkerRuntime(raw) {
+  if (!isPlainObject(raw)) {
+    return null;
+  }
+
+  const workerId =
+    typeof raw.worker_id === "string" && raw.worker_id.trim() ? raw.worker_id.trim() : null;
+  const workerCommitSha =
+    typeof raw.worker_commit_sha === "string" && /^[a-f0-9]{7,64}$/i.test(raw.worker_commit_sha.trim())
+      ? raw.worker_commit_sha.trim()
+      : null;
+  const workerCommitSource =
+    typeof raw.worker_commit_source === "string" && raw.worker_commit_source.trim()
+      ? raw.worker_commit_source.trim()
+      : null;
+  const workerVersion =
+    typeof raw.worker_version === "string" && raw.worker_version.trim()
+      ? raw.worker_version.trim()
+      : null;
+
+  if (!workerId && !workerCommitSha && !workerCommitSource && !workerVersion) {
+    return null;
+  }
+
+  return {
+    worker_id: workerId,
+    worker_commit_sha: workerCommitSha,
+    worker_commit_source: workerCommitSource,
+    worker_version: workerVersion,
+  };
+}
+
+function buildWitnessContentHash(row) {
+  return hashJson({
+    ts: row.ts,
+    type: row.type,
+    commit_id: row.commit_id,
+    artifact_id: row.artifact_id,
+    actor: row.actor,
+    payload: row.payload,
+  });
+}
+
+function buildOrchestrationWitness(type, actor, artifactId, payload) {
+  const row = buildWitnessEvent(type, actor, payload, artifactId || null, null);
+  row.content_hash = buildWitnessContentHash(row);
+  return row;
+}
+
 function normalizeSubmitBody(body) {
   const payload = isPlainObject(body) ? body : {};
   const userRequest =
     typeof payload.user_request === "string" ? payload.user_request.trim() : "";
+  const requestedBy = validateMutationText(payload.requested_by, {
+    required: false,
+    multiline: false,
+    maxLength: 200,
+  });
+  const requestedByLane = validateMutationText(payload.requested_by_lane, {
+    required: false,
+    multiline: false,
+    maxLength: 60,
+  });
+  const requestedBySubjectType = validateMutationText(payload.requested_by_subject_type, {
+    required: false,
+    multiline: false,
+    maxLength: 80,
+  });
 
   return {
     user_request: userRequest,
     scope: payload.scope,
     constraints: normalizeStringList(payload.constraints),
-    repo: isPlainObject(payload.scope) && typeof payload.scope.repo === "string"
-      ? payload.scope.repo.trim()
-      : "",
-    requested_by:
-      typeof payload.requested_by === "string" && payload.requested_by.trim()
-        ? payload.requested_by.trim()
-        : "chatgpt",
+    repo:
+      isPlainObject(payload.scope) && typeof payload.scope.repo === "string"
+        ? payload.scope.repo.trim()
+        : "",
+    requested_by: requestedBy || "chatgpt",
+    requested_by_lane: requestedByLane || "public",
+    requested_by_subject_type: requestedBySubjectType || "human_directed",
+    model_identity: validateModelIdentity(payload.model_identity),
+  };
+}
+
+function buildBaseWitnessPayload(actor, lane, subjectType, extraPayload) {
+  const runtime = getRuntimeContext();
+  return {
+    actor_lane: lane,
+    actor_subject_type: subjectType,
+    actor_subject: actor,
+    runtime_commit_sha: runtime.commit_sha,
+    runtime_commit_source: runtime.commit_source,
+    ...(extraPayload || {}),
   };
 }
 
@@ -66,7 +151,14 @@ async function createOrchestrationJob(body) {
     status: "queued",
     requested_by: normalized.requested_by,
     repo: normalized.repo || null,
-    scope_json: isPlainObject(normalized.scope) ? normalized.scope : {},
+    scope_json: isPlainObject(normalized.scope)
+      ? {
+          ...normalized.scope,
+          requested_by_lane: normalized.requested_by_lane,
+          requested_by_subject_type: normalized.requested_by_subject_type,
+          model_identity: normalized.model_identity,
+        }
+      : {},
     user_request: normalized.user_request,
     constraints_json: normalized.constraints,
     initial_artifact_id: planArtifact.id,
@@ -78,6 +170,19 @@ async function createOrchestrationJob(body) {
     result_json: {},
   };
 
+  const eventPayload = buildBaseWitnessPayload(
+    normalized.requested_by,
+    normalized.requested_by_lane,
+    normalized.requested_by_subject_type,
+    {
+      job_id: jobId,
+      repo: normalized.repo || null,
+      artifact_id: planArtifact.id,
+      policy_verdict: "queued",
+      outcome_status: "queued",
+      model_identity: normalized.model_identity,
+    }
+  );
   const eventRows = [
     {
       id: randomUUID(),
@@ -85,32 +190,18 @@ async function createOrchestrationJob(body) {
       ts: createdAt,
       type: "job_submitted",
       actor: normalized.requested_by,
-      payload: {
-        repo: normalized.repo || null,
-        artifact_id: planArtifact.id,
-      },
+      payload: eventPayload,
     },
   ];
-  const witnessEvent = buildWitnessEvent(
+  const witnessEvent = buildOrchestrationWitness(
     "orchestration.job_submitted",
     normalized.requested_by,
-    {
-      job_id: jobId,
-      repo: normalized.repo || null,
-      artifact_id: planArtifact.id,
-      user_request: normalized.user_request,
-    },
     planArtifact.id,
-    null
+    {
+      ...eventPayload,
+      user_request: normalized.user_request,
+    }
   );
-  witnessEvent.content_hash = hashJson({
-    ts: witnessEvent.ts,
-    type: witnessEvent.type,
-    commit_id: witnessEvent.commit_id,
-    artifact_id: witnessEvent.artifact_id,
-    actor: witnessEvent.actor,
-    payload: witnessEvent.payload,
-  });
 
   await insertRow(config, "plan_artifacts", {
     id: planArtifact.id,
@@ -173,7 +264,7 @@ async function getJobWithEvents(jobId) {
   return { job, events: events || [], artifacts: artifacts || [] };
 }
 
-async function claimNextQueuedJob(workerId) {
+async function claimNextQueuedJob(workerId, metadata) {
   const config = requireSupabaseConfig();
   if (!config) {
     const error = new Error("Supabase is not configured");
@@ -195,6 +286,7 @@ async function claimNextQueuedJob(workerId) {
 
   const now = new Date().toISOString();
   const job = queued[0];
+  const workerRuntime = sanitizeWorkerRuntime(metadata && metadata.worker_runtime);
   const updated = await patchRows(
     config,
     "orchestration_jobs",
@@ -211,14 +303,26 @@ async function claimNextQueuedJob(workerId) {
     return null;
   }
 
+  const payload = buildBaseWitnessPayload(workerId, "worker", "worker", {
+    job_id: job.id,
+    repo: job.repo || null,
+    policy_verdict: "claimed",
+    outcome_status: "claimed",
+    worker_runtime: workerRuntime,
+  });
   await insertRow(config, "orchestration_events", {
     id: randomUUID(),
     job_id: job.id,
     ts: now,
     type: "job_claimed",
     actor: workerId,
-    payload: {},
+    payload,
   });
+  await insertRow(
+    config,
+    "witness_events",
+    buildOrchestrationWitness("orchestration.job_claimed", workerId, job.initial_artifact_id, payload)
+  );
 
   return updated[0];
 }
@@ -237,7 +341,32 @@ async function updateJobLifecycle(jobId, workerId, nextStatus, payload) {
     throw error;
   }
 
+  const currentRows = await selectRows(
+    config,
+    "orchestration_jobs",
+    { id: `eq.${jobId}` },
+    "*",
+    undefined,
+    1
+  );
+  const currentJob = Array.isArray(currentRows) ? currentRows[0] : null;
+  if (!currentJob) {
+    return null;
+  }
+
   const now = new Date().toISOString();
+  const workerRuntime = sanitizeWorkerRuntime(payload && payload.worker_runtime);
+  const eventPayload = buildBaseWitnessPayload(workerId, "worker", "worker", {
+    job_id: jobId,
+    repo: currentJob.repo || null,
+    policy_verdict: nextStatus,
+    outcome_status: nextStatus,
+    ...(payload && payload.event_payload ? payload.event_payload : {}),
+    worker_runtime: workerRuntime,
+    model_identity:
+      payload && typeof payload.model_identity === "string" ? payload.model_identity : null,
+  });
+
   const patch = {
     updated_at: now,
     last_heartbeat_at: now,
@@ -249,7 +378,33 @@ async function updateJobLifecycle(jobId, workerId, nextStatus, payload) {
 
   if (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "blocked") {
     patch.completed_at = now;
-    patch.result_json = isPlainObject(payload && payload.result) ? payload.result : {};
+    patch.result_json = isPlainObject(payload && payload.result)
+      ? {
+          ...payload.result,
+          worker_runtime: workerRuntime,
+          actor: workerId,
+          actor_lane: "worker",
+          actor_subject_type: "worker",
+          model_identity:
+            payload && typeof payload.model_identity === "string" ? payload.model_identity : null,
+          runtime_commit_sha: getRuntimeContext().commit_sha,
+          runtime_commit_source: getRuntimeContext().commit_source,
+          outcome_status: nextStatus,
+        }
+      : {
+          worker_runtime: workerRuntime,
+          actor: workerId,
+          actor_lane: "worker",
+          actor_subject_type: "worker",
+          model_identity:
+            payload && typeof payload.model_identity === "string" ? payload.model_identity : null,
+          runtime_commit_sha: getRuntimeContext().commit_sha,
+          runtime_commit_source: getRuntimeContext().commit_source,
+          outcome_status: nextStatus,
+        };
+    if (payload && payload.policy_verdict && isPlainObject(payload.policy_verdict)) {
+      patch.result_json.policy_verdict = payload.policy_verdict;
+    }
   }
 
   const updated = await patchRows(
@@ -269,8 +424,18 @@ async function updateJobLifecycle(jobId, workerId, nextStatus, payload) {
     ts: now,
     type: payload.event_type,
     actor: workerId,
-    payload: payload.event_payload || {},
+    payload: eventPayload,
   });
+  await insertRow(
+    config,
+    "witness_events",
+    buildOrchestrationWitness(
+      `orchestration.${payload.event_type}`,
+      workerId,
+      currentJob.initial_artifact_id,
+      eventPayload
+    )
+  );
 
   return updated[0];
 }

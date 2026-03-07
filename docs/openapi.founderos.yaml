@@ -14,6 +14,53 @@ components:
       in: header
       name: x-founderos-key
   schemas:
+    RuntimeContext:
+      type: object
+      properties:
+        commit_sha:
+          type:
+            - string
+            - "null"
+        commit_source:
+          type: string
+      required: [commit_sha, commit_source]
+      additionalProperties: false
+    WorkerRuntime:
+      type: object
+      properties:
+        worker_id:
+          type:
+            - string
+            - "null"
+        worker_commit_sha:
+          type:
+            - string
+            - "null"
+        worker_commit_source:
+          type:
+            - string
+            - "null"
+        worker_version:
+          type:
+            - string
+            - "null"
+      required: [worker_id, worker_commit_sha, worker_commit_source, worker_version]
+      additionalProperties: false
+    PolicyBearingArtifact:
+      type: object
+      properties:
+        match:
+          type: string
+          enum: [exact, prefix]
+        path:
+          type: string
+        artifact_type:
+          type: string
+        enforcement:
+          type: string
+          enum: [protected, review_required]
+      required: [match, path, artifact_type, enforcement]
+      additionalProperties: false
     ErrorResponse:
       type: object
       properties:
@@ -34,10 +81,12 @@ components:
           type: string
         version:
           type: string
+        runtime:
+          $ref: "#/components/schemas/RuntimeContext"
         timestamp:
           type: string
           format: date-time
-      required: [ok, service, version, timestamp]
+      required: [ok, service, version, runtime, timestamp]
       additionalProperties: false
     Endpoint:
       type: object
@@ -64,6 +113,8 @@ components:
           type: string
         version:
           type: string
+        runtime:
+          $ref: "#/components/schemas/RuntimeContext"
         openapi:
           type: object
           properties:
@@ -82,7 +133,13 @@ components:
               type: string
             configured:
               type: boolean
-          required: [type, header, configured]
+            env:
+              type:
+                - string
+                - "null"
+            compatibility_fallback_active:
+              type: boolean
+          required: [type, header, configured, env, compatibility_fallback_active]
           additionalProperties: false
         worker_auth:
           type: object
@@ -106,25 +163,38 @@ components:
               type: boolean
             protected_path_policy_enforced:
               type: boolean
+            policy_bearing_artifact_classification:
+              type: boolean
             witness_before_write_required:
               type: boolean
             server_side_secret_handling:
               type: boolean
             worker_lane_separated:
               type: boolean
+            deterministic_mutation_translation_required:
+              type: boolean
+            governed_pr_merge_available:
+              type: boolean
           required:
             - narrow_commitment_boundary
             - planning_only_precommit
             - explicit_authorization_required
             - protected_path_policy_enforced
+            - policy_bearing_artifact_classification
             - witness_before_write_required
             - server_side_secret_handling
             - worker_lane_separated
+            - deterministic_mutation_translation_required
+            - governed_pr_merge_available
           additionalProperties: false
         protected_paths:
           type: array
           items:
             type: string
+        policy_bearing_artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyBearingArtifact"
         allowed_repos:
           type: array
           items:
@@ -137,11 +207,13 @@ components:
         - ok
         - service
         - version
+        - runtime
         - openapi
         - auth
         - worker_auth
         - boundaries
         - protected_paths
+        - policy_bearing_artifacts
         - allowed_repos
         - endpoints
       additionalProperties: false
@@ -151,6 +223,12 @@ components:
         user_request:
           type: string
         requested_by:
+          type: string
+        requested_by_lane:
+          type: string
+        requested_by_subject_type:
+          type: string
+        model_identity:
           type: string
         scope:
           type: object
@@ -582,6 +660,18 @@ components:
           type: string
         authorized_by:
           type: string
+        actor_lane:
+          type: string
+        actor_subject_type:
+          type: string
+        actor_subject:
+          type: string
+        job_id:
+          type: string
+        model_identity:
+          type: string
+        worker_runtime:
+          $ref: "#/components/schemas/WorkerRuntime"
       required: [plan_artifact_id, plan_artifact_hash, authorized_by]
       additionalProperties: false
     CommitExecuteRequest:
@@ -625,6 +715,90 @@ components:
             type:
               type: string
           required: [id, type]
+          additionalProperties: false
+      required: [ok, execution, witness]
+      additionalProperties: false
+    MergePrAuthorization:
+      type: object
+      properties:
+        action:
+          type: string
+          const: merge_pull_request
+        authorized_by:
+          type: string
+        expected_head_sha:
+          type: string
+        expected_base_branch:
+          type: string
+        merge_method:
+          type: string
+          enum: [squash]
+        actor_lane:
+          type: string
+        actor_subject_type:
+          type: string
+        actor_subject:
+          type: string
+        job_id:
+          type: string
+        model_identity:
+          type: string
+        worker_runtime:
+          $ref: "#/components/schemas/WorkerRuntime"
+      required: [action, authorized_by, expected_head_sha, expected_base_branch]
+      additionalProperties: false
+    MergePrRequest:
+      type: object
+      properties:
+        repo:
+          type: string
+        pull_number:
+          type: integer
+        authorization:
+          $ref: "#/components/schemas/MergePrAuthorization"
+      required: [repo, pull_number, authorization]
+      additionalProperties: false
+    MergePrResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        execution:
+          type: object
+          properties:
+            repo:
+              type: string
+            pr_number:
+              type: integer
+            pr_url:
+              type: string
+              format: uri
+            merge_method:
+              type: string
+              const: squash
+            merged:
+              type: boolean
+            merge_commit_sha:
+              type:
+                - string
+                - "null"
+            head_sha:
+              type: string
+            base_branch:
+              type: string
+          required: [repo, pr_number, pr_url, merge_method, merged, merge_commit_sha, head_sha, base_branch]
+          additionalProperties: false
+        witness:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+            completion_id:
+              type: string
+          required: [id, type, completion_id]
           additionalProperties: false
       required: [ok, execution, witness]
       additionalProperties: false
@@ -924,6 +1098,61 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Witness sink or GitHub API failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/commit/merge-pr:
+    post:
+      operationId: commitMergePr
+      summary: Explicitly merge one allowlisted pull request through APS under narrow squash-only policy
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergePrRequest"
+      responses:
+        "200":
+          description: Pull request merged through APS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergePrResponse"
+        "400":
+          description: Invalid request body or explicit authorization fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Merge blocked by APS policy, branch protection, or non-green checks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing required server configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: GitHub merge read or merge call failed after authorization
           content:
             application/json:
               schema:

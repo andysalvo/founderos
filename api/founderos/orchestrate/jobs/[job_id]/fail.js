@@ -37,6 +37,10 @@ module.exports = async (req, res) => {
       event_type: "job_failed",
       event_payload: parsed.value,
       result: isPlainObject(parsed.value.result) ? parsed.value.result : {},
+      worker_runtime: isPlainObject(parsed.value.worker_runtime) ? parsed.value.worker_runtime : null,
+      model_identity:
+        typeof parsed.value.model_identity === "string" ? parsed.value.model_identity.trim() : null,
+      policy_verdict: isPlainObject(parsed.value.policy_verdict) ? parsed.value.policy_verdict : null,
     });
 
     if (!updated) {

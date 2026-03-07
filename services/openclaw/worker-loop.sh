@@ -2,13 +2,13 @@
 set -euo pipefail
 
 BASE_URL="${FOUNDEROS_BASE_URL:-}"
-WRITE_KEY="${FOUNDEROS_WRITE_KEY:-}"
+WRITE_KEY="${FOUNDEROS_PUBLIC_WRITE_KEY:-${FOUNDEROS_WRITE_KEY:-}}"
 WORKER_KEY="${FOUNDEROS_WORKER_KEY:-}"
 WORKER_ID="${FOUNDEROS_WORKER_ID:-openclaw-worker}"
 POLL_SECONDS="${FOUNDEROS_POLL_SECONDS:-10}"
 
 if [[ -z "${BASE_URL}" || -z "${WRITE_KEY}" || -z "${WORKER_KEY}" ]]; then
-  echo "FOUNDEROS_BASE_URL, FOUNDEROS_WRITE_KEY, and FOUNDEROS_WORKER_KEY are required" >&2
+  echo "FOUNDEROS_BASE_URL, FOUNDEROS_PUBLIC_WRITE_KEY or FOUNDEROS_WRITE_KEY, and FOUNDEROS_WORKER_KEY are required" >&2
   exit 1
 fi
 
@@ -80,7 +80,7 @@ const desiredActivationDoc = [
   "- OpenClaw stays on the droplet as the private worker habitat.",
   "- ChatGPT remains the public conversational interface.",
   "- APS stays on Vercel as the public control plane and authority boundary.",
-  "- OpenClaw uses `FOUNDEROS_WRITE_KEY` for public APS reads and submits when needed.",
+  "- OpenClaw uses `FOUNDEROS_PUBLIC_WRITE_KEY` when available, or the transitional `FOUNDEROS_WRITE_KEY`, for public APS reads and submits when needed.",
   "- OpenClaw uses `FOUNDEROS_WORKER_KEY` for worker-only orchestration claim, heartbeat, complete, and fail calls.",
   "",
   "Do not give OpenClaw the GitHub App private key or Supabase service-role key directly.",
@@ -97,14 +97,15 @@ const desiredActivationDoc = [
   "OpenClaw on the droplet should have:",
   "",
   "- `FOUNDEROS_BASE_URL`",
-  "- `FOUNDEROS_WRITE_KEY`",
+  "- `FOUNDEROS_PUBLIC_WRITE_KEY` or `FOUNDEROS_WRITE_KEY`",
   "- `FOUNDEROS_WORKER_KEY`",
   "- `FOUNDEROS_WORKER_ID`",
   "",
   "Recommended values:",
   "",
   "- `FOUNDEROS_BASE_URL=https://founderos-alpha.vercel.app`",
-  "- `FOUNDEROS_WRITE_KEY=<same value configured in Vercel for GPT/user APS auth>`",
+  "- `FOUNDEROS_PUBLIC_WRITE_KEY=<preferred public/user APS key configured in Vercel>`",
+  "- `FOUNDEROS_WRITE_KEY=<optional compatibility fallback during migration>`",
   "- `FOUNDEROS_WORKER_KEY=<worker-only key configured in Vercel>`",
   "- `FOUNDEROS_WORKER_ID=openclaw-vm`",
   "",
@@ -116,6 +117,7 @@ const desiredActivationDoc = [
   "mkdir -p /root/.config/founderos",
   "cat >/root/.config/founderos/aps.env <<'EOF'",
   "FOUNDEROS_BASE_URL=https://founderos-alpha.vercel.app",
+  "FOUNDEROS_PUBLIC_WRITE_KEY=REPLACE_ME",
   "FOUNDEROS_WRITE_KEY=REPLACE_ME",
   "FOUNDEROS_WORKER_KEY=REPLACE_ME",
   "FOUNDEROS_WORKER_ID=openclaw-vm",
@@ -218,7 +220,7 @@ function buildImprovementProposal({ repo, activationText, desiredActivationDoc }
         "README.md",
       ],
       proposed_changes: [
-        "Document FOUNDEROS_WORKER_KEY alongside FOUNDEROS_WRITE_KEY in the VM activation path.",
+        "Document FOUNDEROS_WORKER_KEY alongside FOUNDEROS_PUBLIC_WRITE_KEY and the transitional FOUNDEROS_WRITE_KEY in the VM activation path.",
         "Add the worker claim, heartbeat, complete, and fail loop to the activation and verification docs.",
         "Align top-level docs with the fact that the live system now has a public async lane and a private worker lane.",
       ],

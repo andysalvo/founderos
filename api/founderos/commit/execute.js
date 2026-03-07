@@ -46,6 +46,7 @@ module.exports = async (req, res) => {
       planArtifactHash: resolved.planArtifactHash,
       witnessType: "commit.execution_authorized",
       docsOnly: false,
+      provenance: resolved.provenance,
     });
 
     return sendJson(res, 200, { ok: true, ...executed });

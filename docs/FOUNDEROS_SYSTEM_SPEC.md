@@ -97,7 +97,11 @@ These routes exist in code and are covered by the contract test in [tests/founde
 - `POST /api/founderos/precommit/plan`
 - `POST /api/founderos/repo/file`
 - `POST /api/founderos/repo/tree`
+- `POST /api/founderos/commit/freeze-write-set`
 - `POST /api/founderos/commit/execute`
+- `POST /api/founderos/commit/merge-pr`
+- `POST /api/founderos/orchestrate/submit`
+- `GET /api/founderos/orchestrate/jobs/{job_id}`
 
 Primary implementation paths:
 
@@ -105,6 +109,9 @@ Primary implementation paths:
 - [api/founderos/repo/file.js](../api/founderos/repo/file.js)
 - [api/founderos/repo/tree.js](../api/founderos/repo/tree.js)
 - [api/founderos/commit/execute.js](../api/founderos/commit/execute.js)
+- [api/founderos/commit/merge-pr.js](../api/founderos/commit/merge-pr.js)
+- [api/founderos/orchestrate/submit.js](../api/founderos/orchestrate/submit.js)
+- [api/founderos/orchestrate/jobs/[job_id].js](../api/founderos/orchestrate/jobs/[job_id].js)
 - [docs/openapi.founderos.yaml](./openapi.founderos.yaml)
 
 ### Current safety invariants
@@ -112,20 +119,35 @@ Primary implementation paths:
 The active v1 seed enforces these invariants today:
 
 - authenticated routes require `x-founderos-key` with server-side secret validation,
+- `FOUNDEROS_PUBLIC_WRITE_KEY` is the preferred public/user key and `FOUNDEROS_WRITE_KEY` remains a compatibility fallback for the same lane,
 - `precommit/plan` is proposal-only and does not perform durable writes,
-- `commit/execute` is the only durable GitHub write path,
+- `commit/execute` and `commit/merge-pr` are the only durable GitHub write paths,
 - `commit/execute` is exact-write-set based and hash-bound,
+- `commit/merge-pr` is explicit-authorization based, allowlisted-repo only, squash-only, protected-branch only, and blocked unless checks are green,
 - GitHub writes happen only after witness logging succeeds,
-- protected control-plane paths are blocked,
+- policy-bearing artifacts are classified explicitly and protected control-plane paths are blocked,
+- raw model text does not directly become shell, Git, SQL, or mutating external API input without deterministic validation,
 - GitHub App credentials and Supabase credentials remain server-side.
 
 Protected paths currently blocked by server policy:
 
 - `api/founderos/**`
+- `api/_lib/**`
 - `docs/openapi.founderos.yaml`
+- `docs/GPT_INSTRUCTIONS.md`
+- `docs/BOUNDARIES.md`
+- `docs/FOUNDEROS_SYSTEM_SPEC.md`
+- `docs/GPT_BUILDER_SETUP.md`
+- `infra/supabase/**`
 - `.env*`
 - `.github/workflows/**`
 - `vercel.json`
+
+Policy-bearing artifacts that are explicitly classified but not auto-blocked include:
+
+- `memory/decisions/**`
+- `services/openclaw/**`
+- `docs/FOUNDEROS_LIVE_STATE.md`
 
 These are grounded in:
 
@@ -140,7 +162,7 @@ The current seed assumes:
 - APS is deployed as Vercel functions from the root `api/` directory,
 - GitHub reads and writes happen through GitHub App auth,
 - witness logging is stored in Supabase using [infra/supabase/witness_events.sql](../infra/supabase/witness_events.sql),
-- a lightweight OpenClaw-side APS client can call APS with one narrow key using [services/openclaw/aps-client.sh](../services/openclaw/aps-client.sh).
+- a lightweight OpenClaw-side APS client can call APS using the preferred public key lane plus the separate worker key lane through [services/openclaw/aps-client.sh](../services/openclaw/aps-client.sh).
 
 Current public-domain examples in repo docs:
 
@@ -158,8 +180,8 @@ The system spec treats `founderos-alpha.vercel.app` as the documented current ex
 The current seed supports a simple VM-side activation pattern:
 
 - OpenClaw or a shell on the VM receives `FOUNDEROS_BASE_URL`,
-- OpenClaw or the operator uses `FOUNDEROS_WRITE_KEY`,
-- the APS client script calls `capabilities`, `repo-file`, `repo-tree`, `plan`, and `execute`.
+- OpenClaw or the operator uses `FOUNDEROS_PUBLIC_WRITE_KEY` or the transitional `FOUNDEROS_WRITE_KEY`,
+- the APS client script calls `capabilities`, `repo-file`, `repo-tree`, `plan`, `execute`, and the explicit human-directed `merge-pr` helper when needed.
 
 This current activation path is documented in:
 
@@ -269,11 +291,30 @@ Its non-negotiable rules:
 - no direct push to `main`,
 - worker identity is recorded as the actor.
 
+### Narrow governed merge lane
+
+The current upgrade adds a separate public APS merge lane:
+
+- `POST /api/founderos/commit/merge-pr`
+
+Its non-negotiable rules are narrower than PR creation:
+
+- repo must be allowlisted,
+- authorization must be explicit and scoped to `merge_pull_request`,
+- base branch must already be protected,
+- head SHA must match the authorized SHA,
+- GitHub checks must already be green,
+- merge method is fixed to `squash`,
+- GitHub branch protection is not bypassed,
+- merge results are witness-logged before and after the GitHub merge call,
+- this route does not grant any general GitHub edit authority.
+
 ### Public schema policy
 
 The public GPT-facing schema should include:
 
 - active read/planning routes from v1,
+- the narrow governed `commit/merge-pr` route,
 - target orchestration submit/status routes from v2,
 - no worker claim/heartbeat/complete/fail endpoints,
 - no worker-only `commit/auto-execute`.
@@ -419,8 +460,9 @@ The ledger below records where each key belongs, who owns it, and how it is used
 
 | Name | Owning system | Stored where | Used by | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `FOUNDEROS_WRITE_KEY` | APS | Vercel env vars; manual entry into GPT Builder or VM env when needed | Authenticated APS routes; current OpenClaw-side APS client | Active now | Shared API key for the current v1 seed |
-| `FOUNDEROS_WORKER_KEY` | APS | Vercel env vars and worker VM env | Worker-only orchestration and auto-execute routes | Target next | Separate machine lane from GPT/user lane |
+| `FOUNDEROS_PUBLIC_WRITE_KEY` | APS | Vercel env vars; manual entry into GPT Builder or VM env when needed | Public/user APS routes | Active now | Preferred public lane key |
+| `FOUNDEROS_WRITE_KEY` | APS | Vercel env vars; manual entry into GPT Builder or VM env when needed | Compatibility fallback for public/user APS routes and existing scripts | Transitional | Keep working during migration to `FOUNDEROS_PUBLIC_WRITE_KEY` |
+| `FOUNDEROS_WORKER_KEY` | APS | Vercel env vars and worker VM env | Worker-only orchestration and auto-execute routes | Active now | Separate machine lane from GPT/user lane |
 | `ALLOWED_REPOS` | APS | Vercel env vars | APS repo read/write allowlist enforcement | Active now | Comma-separated repo list |
 | `GITHUB_APP_ID` | APS | Vercel env vars | APS GitHub App auth | Active now | Matches the created GitHub App |
 | `GITHUB_INSTALLATION_ID` | APS | Vercel env vars | APS GitHub App auth | Active now | Installation on the target repo/org |
@@ -435,7 +477,7 @@ The ledger below records where each key belongs, who owns it, and how it is used
 
 These are not repo-tracked env vars, but they still need organized handling:
 
-- ChatGPT Builder action key entry: the key value should equal `FOUNDEROS_WRITE_KEY` unless and until a distinct GPT-facing key is introduced.
+- ChatGPT Builder action key entry: the key value should equal `FOUNDEROS_PUBLIC_WRITE_KEY` when present, otherwise `FOUNDEROS_WRITE_KEY`.
 - GitHub App setup: App creation, installation, and private key generation happen in GitHub, then values are copied into Vercel.
 - DNS and TLS settings: managed in the chosen DNS/provider layer, not in repo env files.
 - VM SSH access and bootstrap credentials: managed separately from Founderos application secrets.
@@ -482,6 +524,7 @@ Create or confirm:
 
 1. Create the Vercel project from this repo.
 2. Add the required env vars:
+   - `FOUNDEROS_PUBLIC_WRITE_KEY`
    - `FOUNDEROS_WRITE_KEY`
    - `ALLOWED_REPOS`
    - `GITHUB_APP_ID`
@@ -505,7 +548,7 @@ Reference:
 1. Open ChatGPT GPT Builder.
 2. Import or paste [docs/openapi.founderos.yaml](./openapi.founderos.yaml).
 3. Configure API key auth using header `x-founderos-key`.
-4. Set the key value to `FOUNDEROS_WRITE_KEY`.
+4. Set the key value to `FOUNDEROS_PUBLIC_WRITE_KEY` when present, otherwise `FOUNDEROS_WRITE_KEY`.
 5. Use [docs/GPT_INSTRUCTIONS.md](./GPT_INSTRUCTIONS.md) as the starting policy.
 6. Confirm the GPT can call `capabilities` and `capabilitiesCheck`.
 
@@ -519,7 +562,7 @@ Reference:
 2. Install OpenClaw and any operator UI stack you choose to use.
 3. Create the VM env file with:
    - `FOUNDEROS_BASE_URL`
-   - `FOUNDEROS_WRITE_KEY` for the current seed path
+   - `FOUNDEROS_PUBLIC_WRITE_KEY` or the transitional `FOUNDEROS_WRITE_KEY` for the public/user APS lane
 4. For the target worker path, add:
    - `FOUNDEROS_WORKER_KEY`
 5. Place [services/openclaw/aps-client.sh](../services/openclaw/aps-client.sh) on the VM.
@@ -575,10 +618,11 @@ Do this:
 Do this:
 
 1. add `FOUNDEROS_BASE_URL`,
-2. add `FOUNDEROS_WRITE_KEY` for the current seed path,
+2. add `FOUNDEROS_PUBLIC_WRITE_KEY` or the transitional `FOUNDEROS_WRITE_KEY` for the public/user lane,
 3. place the APS client script on the VM,
 4. verify repo read and plan calls before attempting execution,
-5. only later introduce `FOUNDEROS_WORKER_KEY` and async worker behavior.
+5. add `FOUNDEROS_WORKER_KEY` for the worker lane,
+6. verify worker heartbeats and runtime commit attribution before trusting long-running jobs.
 
 ### If ChatGPT Builder already exists
 

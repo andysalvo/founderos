@@ -1,4 +1,10 @@
-const { requireMethod, requireWorkerKey, sendJson } = require("../../_lib/founderos-v1");
+const {
+  isPlainObject,
+  parseJsonBody,
+  requireMethod,
+  requireWorkerKey,
+  sendJson,
+} = require("../../_lib/founderos-v1");
 const { claimNextQueuedJob } = require("../../_lib/orchestration");
 
 module.exports = async (req, res) => {
@@ -11,6 +17,11 @@ module.exports = async (req, res) => {
       return undefined;
     }
 
+    const parsed = parseJsonBody(req.body);
+    if (!parsed.ok || !isPlainObject(parsed.value)) {
+      return sendJson(res, 400, { ok: false, error: "invalid_json" });
+    }
+
     const workerId =
       req &&
       req.headers &&
@@ -19,7 +30,7 @@ module.exports = async (req, res) => {
         ? req.headers["x-founderos-worker-id"].trim()
         : "openclaw-worker";
 
-    const job = await claimNextQueuedJob(workerId);
+    const job = await claimNextQueuedJob(workerId, parsed.value);
     if (!job) {
       return sendJson(res, 200, { ok: true, job: null });
     }

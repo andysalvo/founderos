@@ -38,7 +38,9 @@ These public routes are active in the repo and exposed in the public schema:
 - `POST /api/founderos/precommit/plan`
 - `POST /api/founderos/repo/file`
 - `POST /api/founderos/repo/tree`
+- `POST /api/founderos/commit/freeze-write-set`
 - `POST /api/founderos/commit/execute`
+- `POST /api/founderos/commit/merge-pr`
 - `POST /api/founderos/orchestrate/submit`
 - `GET /api/founderos/orchestrate/jobs/{job_id}`
 
@@ -77,6 +79,7 @@ Current worker does not yet:
 
 - generate exact write sets automatically
 - open PRs through the async worker lane
+- merge PRs automatically
 - maintain a durable cognitive memory kernel beyond orchestration history
 
 ## Current Durable State
@@ -101,7 +104,9 @@ The system is autonomous only inside these constraints:
 
 - public requests go through APS
 - protected control-plane paths remain blocked
+- policy-bearing artifacts are explicitly classified and not treated as ordinary content
 - durable code writes still require governed APS execution
+- governed PR merge exists, but only as an explicit human-directed APS call
 - current async worker loop inspects and reports but does not directly self-modify
 - consequential changes should still end in reviewable PRs
 
@@ -112,6 +117,10 @@ The next safe autonomy milestone is:
 `inspect -> choose one safe improvement -> generate bounded candidate write set -> open PR`
 
 That is the bridge from autonomous inspection to autonomous self-improvement by PR.
+
+The intentionally non-automated step after this upgrade remains:
+
+`human reviews the PR and explicitly decides whether APS may merge it`
 
 The worker is now moving toward the first half of that loop by returning:
 

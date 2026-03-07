@@ -5,7 +5,7 @@ This is the live persistent setup for the current Founderos async worker path:
 - OpenClaw stays on the droplet as the private worker habitat.
 - ChatGPT remains the public conversational interface.
 - APS stays on Vercel as the public control plane and authority boundary.
-- OpenClaw uses `FOUNDEROS_WRITE_KEY` for public APS reads and submits when needed.
+- OpenClaw uses `FOUNDEROS_PUBLIC_WRITE_KEY` when available, or the transitional `FOUNDEROS_WRITE_KEY`, for public APS reads and submits when needed.
 - OpenClaw uses `FOUNDEROS_WORKER_KEY` for worker-only orchestration claim, heartbeat, complete, and fail calls.
 
 Do not give OpenClaw the GitHub App private key or Supabase service-role key directly.
@@ -22,14 +22,15 @@ Do not give OpenClaw the GitHub App private key or Supabase service-role key dir
 OpenClaw on the droplet should have:
 
 - `FOUNDEROS_BASE_URL`
-- `FOUNDEROS_WRITE_KEY`
+- `FOUNDEROS_PUBLIC_WRITE_KEY` or `FOUNDEROS_WRITE_KEY`
 - `FOUNDEROS_WORKER_KEY`
 - `FOUNDEROS_WORKER_ID`
 
 Recommended values:
 
 - `FOUNDEROS_BASE_URL=https://founderos-alpha.vercel.app`
-- `FOUNDEROS_WRITE_KEY=<same value configured in Vercel for GPT/user APS auth>`
+- `FOUNDEROS_PUBLIC_WRITE_KEY=<preferred public/user APS key configured in Vercel>`
+- `FOUNDEROS_WRITE_KEY=<optional compatibility fallback during migration>`
 - `FOUNDEROS_WORKER_KEY=<worker-only key configured in Vercel>`
 - `FOUNDEROS_WORKER_ID=openclaw-vm`
 
@@ -41,6 +42,7 @@ Create a small env file on the droplet:
 mkdir -p /root/.config/founderos
 cat >/root/.config/founderos/aps.env <<EOF
 FOUNDEROS_BASE_URL=https://founderos-alpha.vercel.app
+FOUNDEROS_PUBLIC_WRITE_KEY=REPLACE_ME
 FOUNDEROS_WRITE_KEY=REPLACE_ME
 FOUNDEROS_WORKER_KEY=REPLACE_ME
 FOUNDEROS_WORKER_ID=openclaw-vm
@@ -61,6 +63,7 @@ It supports:
 - `repo-file`
 - `repo-tree`
 - `submit`
+- `merge-pr`
 - `job-status`
 - `claim`
 - `heartbeat`
@@ -103,7 +106,9 @@ Async job verification:
 
 - APS checks the repo allowlist.
 - APS rejects protected paths.
+- APS classifies policy-bearing artifacts explicitly.
 - Durable writes still require governed APS execution.
+- APS will only merge a PR through the narrow squash-only merge lane after explicit authorization and green GitHub checks.
 - Autonomous changes should end in reviewable PRs rather than direct pushes to `main`.
 
 ## Daily operating model
