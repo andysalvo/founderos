@@ -135,6 +135,8 @@ const desiredActivationDoc = [
   "- `plan`",
   "- `repo-file`",
   "- `repo-tree`",
+  "- `freeze`",
+  "- `execute`",
   "- `submit`",
   "- `job-status`",
   "- `claim`",
@@ -250,51 +252,63 @@ function buildImprovementProposal({ repo, activationText, desiredActivationDoc }
   }
 
   return {
-      kind: "safe_improvement_proposal",
-      title: "Tighten worker recommendation freshness and add regression coverage",
-      priority: "high",
+    kind: "safe_improvement_proposal",
+    title: "Upgrade the worker from inspect-and-report to inspect-and-propose",
+    priority: "high",
+    rationale:
+      "The worker already produces structured inspection results, but the next bounded capability step is to promote proposal output into a first-class result block with a cleaner scaffold for freeze -> execute promotion.",
+    risk_level: "low",
+    target_area: "services/openclaw worker result shaping and operator-facing docs",
+    target_files: [
+      "services/openclaw/worker-loop.sh",
+      "services/openclaw/aps-client.sh",
+      "docs/FOUNDEROS_LIVE_STATE.md",
+      "README.md",
+    ],
+    proposed_changes: [
+      "Return a dedicated proposal block alongside the broader inspection result.",
+      "Expose a worker-side helper for freezing exact write sets through APS.",
+      "Keep the live-state and README docs aligned with the richer worker behavior and public freeze-write-set surface.",
+    ],
+    acceptance_criteria: [
+      "Completed jobs include a dedicated bounded proposal block with rationale, target files, acceptance criteria, and a candidate write-set scaffold.",
+      "The helper script supports the safer freeze -> execute path without widening worker authority.",
+      "Top-level docs describe the richer worker output and the public freeze-write-set route truthfully.",
+    ],
+    expected_outcome:
+      "Founderos can move from inspect-and-report toward inspect-and-propose without weakening the existing PR-only governed execution model.",
+    candidate_write_set: {
+      mode: "exact_write_set_candidate",
+      repo,
+      branch_name: "codex/worker-inspect-and-propose",
+      base_branch: "main",
+      title: "Upgrade worker from inspect-and-report to inspect-and-propose",
       rationale:
-        "The worker should stop repeating already-landed docs recommendations and instead return the next real bounded improvement.",
-      risk_level: "low",
-      target_area: "services/openclaw worker recommendation logic and regression coverage",
-      target_files: [
-        "services/openclaw/worker-loop.sh",
-        "tests/founderos-v1-contract.test.mjs",
+        "The worker should return one clearer bounded proposal block and support the safer freeze -> execute workflow without gaining broader strategy authority.",
+      files: [
+        {
+          path: "services/openclaw/worker-loop.sh",
+          action: "update",
+          intent: "Promote the worker result into inspect-and-propose output with a dedicated proposal block.",
+        },
+        {
+          path: "services/openclaw/aps-client.sh",
+          action: "update",
+          intent: "Add a helper for the public freeze-write-set route.",
+        },
+        {
+          path: "docs/FOUNDEROS_LIVE_STATE.md",
+          action: "update",
+          intent: "Reflect the richer worker output and public freeze-write-set route accurately.",
+        },
+        {
+          path: "README.md",
+          action: "update",
+          intent: "Keep the top-level entrypoint aligned with the public surface and richer worker behavior.",
+        },
       ],
-      proposed_changes: [
-        "Detect when the live worker-auth docs markers are already present.",
-        "Suppress the stale docs-alignment recommendation in that state.",
-        "Add regression coverage for recommendation freshness in the active test suite.",
-      ],
-      acceptance_criteria: [
-        "When the activation doc already contains live worker-auth markers, the worker does not recommend the docs-alignment fix again.",
-        "The returned bounded proposal points at worker-loop freshness logic and regression coverage.",
-        "The change stays within the current APS boundary and avoids protected paths.",
-      ],
-      expected_outcome:
-        "Founderos recommends the next real low-risk self-improvement instead of repeating stale docs work.",
-      candidate_write_set: {
-        mode: "proposal_only",
-        repo,
-        branch_name: "codex/worker-recommendation-freshness",
-        base_branch: "main",
-        title: "Improve worker recommendation freshness for Founderos",
-        rationale:
-          "Once the worker-auth docs fix has landed, the worker should recommend the next bounded improvement instead of repeating stale docs work.",
-        files: [
-          {
-            path: "services/openclaw/worker-loop.sh",
-            action: "update",
-            intent: "Make recommendation selection freshness-aware when docs markers are already present.",
-          },
-          {
-            path: "tests/founderos-v1-contract.test.mjs",
-            action: "update",
-            intent: "Add regression coverage for recommendation freshness.",
-          },
-        ],
-      },
-    };
+    },
+  };
 }
 
 const improvementProposal = buildImprovementProposal({
@@ -318,27 +332,38 @@ const selfState = {
   },
   capabilities: {
     active_surface: activeSurface,
-    worker_loop_mode: "inspect_and_report",
+    worker_loop_mode: "inspect_and_propose",
     protected_write_boundary: "PR-only governed execution through APS",
   },
   current_limitations: [
-    "Worker returns structured inspection results but does not yet generate exact write sets.",
+    "Worker returns bounded proposal scaffolds but does not yet generate exact write sets automatically.",
     "Autonomous PR creation is not yet wired through the async worker lane.",
     "Durable memory kernel beyond orchestration history is still planned work.",
   ],
 };
 
 const result = {
-  summary: "Initial worker self-state inspection completed.",
+  summary: "Worker inspection completed with a bounded proposal scaffold.",
   result: {
     repo,
     file_count: files.length,
     top_paths: topPaths,
     recommended_next_action:
-      "Review the bounded safe improvement proposal and promote it into a PR-ready exact write set.",
+      "Review the bounded proposal block and, if accepted, promote its candidate write-set scaffold into an exact governed write set.",
     readme_excerpt: readmeLines,
     activation_doc_excerpt: activationLines,
     self_state: selfState,
+    proposal: {
+      status: "bounded_candidate_ready",
+      mode: improvementProposal.candidate_write_set && improvementProposal.candidate_write_set.mode
+        ? improvementProposal.candidate_write_set.mode
+        : "proposal_only",
+      title: improvementProposal.title,
+      rationale: improvementProposal.rationale,
+      target_files: improvementProposal.target_files,
+      acceptance_criteria: improvementProposal.acceptance_criteria,
+      candidate_write_set: improvementProposal.candidate_write_set || null,
+    },
     suggested_next_improvement: improvementProposal,
   },
 };
@@ -382,7 +407,7 @@ inspect_job() {
   FOUNDEROS_ACTIVATION_DOC_JSON="${activation_doc_json}" \
   build_result_payload "${claimed_json}" "${payload_file}"
 
-  post_status "${job_id}" "write_set_ready" "Inspection summary prepared" 0.9
+  post_status "${job_id}" "write_set_ready" "Inspection summary prepared with bounded proposal scaffold" 0.9
   if [[ ! -s "${payload_file}" ]]; then
     echo "Worker payload generation failed for ${job_id}" >&2
     fail_job "${job_id}" "${payload_file}"
