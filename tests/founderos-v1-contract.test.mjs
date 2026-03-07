@@ -13,6 +13,9 @@ const precommitPlanHandler = require("../api/founderos/precommit/plan.js");
 const repoFileHandler = require("../api/founderos/repo/file.js");
 const repoTreeHandler = require("../api/founderos/repo/tree.js");
 const commitExecuteHandler = require("../api/founderos/commit/execute.js");
+const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit.js");
+const orchestrateJobStatusHandler = require("../api/founderos/orchestrate/jobs/[job_id].js");
+const orchestrateClaimHandler = require("../api/founderos/orchestrate/claim.js");
 
 function createMockResponse() {
   return {
@@ -39,7 +42,7 @@ async function invoke(handler, req) {
   };
 }
 
-test("OpenAPI surface is exactly the minimal v1 contract", async () => {
+test("OpenAPI surface exposes only the public APS contract", async () => {
   const openapi = await readFile(new URL("../docs/openapi.founderos.yaml", import.meta.url), "utf8");
 
   assert.match(
@@ -59,6 +62,8 @@ test("OpenAPI surface is exactly the minimal v1 contract", async () => {
     "/api/founderos/repo/file:",
     "/api/founderos/repo/tree:",
     "/api/founderos/commit/execute:",
+    "/api/founderos/orchestrate/submit:",
+    "/api/founderos/orchestrate/jobs/{job_id}:",
   ]) {
     assert.match(openapi, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -69,6 +74,10 @@ test("OpenAPI surface is exactly the minimal v1 contract", async () => {
     "/api/mcp",
     "/api/founderos/witness/",
     "/founderos/system/",
+    "/api/founderos/orchestrate/claim:",
+    "/api/founderos/orchestrate/jobs/{job_id}/heartbeat:",
+    "/api/founderos/orchestrate/jobs/{job_id}/complete:",
+    "/api/founderos/orchestrate/jobs/{job_id}/fail:",
   ]) {
     assert.doesNotMatch(openapi, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -82,14 +91,16 @@ test("health handler matches the documented shape", async () => {
   assert.equal(response.json.ok, true);
 });
 
-test("capabilities is public and returns only the seven active endpoints", async () => {
+test("capabilities is public and returns only the nine public APS endpoints", async () => {
   process.env.ALLOWED_REPOS = "owner/repo";
+  process.env.FOUNDEROS_WORKER_KEY = "worker-key";
 
   const response = await invoke(capabilitiesHandler, { method: "GET", headers: {} });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.endpoints.length, 7);
+  assert.equal(response.json.endpoints.length, 9);
   assert.equal(response.json.openapi.path, "docs/openapi.founderos.yaml");
+  assert.equal(response.json.worker_auth.header, "x-founderos-worker-key");
   assert.deepEqual(
     response.json.endpoints.map((item) => item.path),
     [
@@ -100,6 +111,8 @@ test("capabilities is public and returns only the seven active endpoints", async
       "/api/founderos/repo/file",
       "/api/founderos/repo/tree",
       "/api/founderos/commit/execute",
+      "/api/founderos/orchestrate/submit",
+      "/api/founderos/orchestrate/jobs/{job_id}",
     ]
   );
 });
@@ -137,8 +150,52 @@ test("capabilities check mirrors capabilities over POST", async () => {
 
   assert.equal(authorized.statusCode, 200);
   assert.equal(authorized.json.ok, true);
-  assert.equal(authorized.json.endpoints.length, 7);
+  assert.equal(authorized.json.endpoints.length, 9);
   assert.equal(authorized.json.endpoints[2].path, "/api/founderos/capabilities/check");
+});
+
+test("orchestrate.submit fails closed when Supabase storage is not configured", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+  delete process.env.SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const response = await invoke(orchestrateSubmitHandler, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: {
+      user_request: "Inspect the repo and prepare a PR plan",
+      scope: { repo: "owner/repo", branch: "main" },
+    },
+  });
+
+  assert.equal(response.statusCode, 500);
+  assert.equal(response.json.error, "orchestration_not_configured");
+});
+
+test("orchestrate job status requires a job id", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+
+  const response = await invoke(orchestrateJobStatusHandler, {
+    method: "GET",
+    headers: { "x-founderos-key": "test-key" },
+    query: {},
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "job_id_required");
+});
+
+test("worker claim requires the worker key", async () => {
+  process.env.FOUNDEROS_WORKER_KEY = "worker-key";
+
+  const response = await invoke(orchestrateClaimHandler, {
+    method: "POST",
+    headers: {},
+    body: {},
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json.error, "worker_unauthorized");
 });
 
 test("repo.file rejects repos outside the allowlist before external calls", async () => {

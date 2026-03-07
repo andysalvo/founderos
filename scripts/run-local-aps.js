@@ -9,6 +9,12 @@ const precommitPlanHandler = require("../api/founderos/precommit/plan");
 const repoFileHandler = require("../api/founderos/repo/file");
 const repoTreeHandler = require("../api/founderos/repo/tree");
 const commitExecuteHandler = require("../api/founderos/commit/execute");
+const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit");
+const orchestrateClaimHandler = require("../api/founderos/orchestrate/claim");
+const orchestrateJobStatusHandler = require("../api/founderos/orchestrate/jobs/[job_id]");
+const orchestrateJobHeartbeatHandler = require("../api/founderos/orchestrate/jobs/[job_id]/heartbeat");
+const orchestrateJobCompleteHandler = require("../api/founderos/orchestrate/jobs/[job_id]/complete");
+const orchestrateJobFailHandler = require("../api/founderos/orchestrate/jobs/[job_id]/fail");
 
 const PORT = Number(process.env.PORT || process.env.FOUNDEROS_PORT || 8787);
 const HOST = process.env.HOST || process.env.FOUNDEROS_HOST || "127.0.0.1";
@@ -21,7 +27,32 @@ const routes = new Map([
   ["POST /api/founderos/repo/file", repoFileHandler],
   ["POST /api/founderos/repo/tree", repoTreeHandler],
   ["POST /api/founderos/commit/execute", commitExecuteHandler],
+  ["POST /api/founderos/orchestrate/submit", orchestrateSubmitHandler],
+  ["POST /api/founderos/orchestrate/claim", orchestrateClaimHandler],
 ]);
+
+const dynamicRoutes = [
+  {
+    method: "GET",
+    pattern: /^\/api\/founderos\/orchestrate\/jobs\/([^/]+)$/,
+    handler: orchestrateJobStatusHandler,
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/founderos\/orchestrate\/jobs\/([^/]+)\/heartbeat$/,
+    handler: orchestrateJobHeartbeatHandler,
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/founderos\/orchestrate\/jobs\/([^/]+)\/complete$/,
+    handler: orchestrateJobCompleteHandler,
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/founderos\/orchestrate\/jobs\/([^/]+)\/fail$/,
+    handler: orchestrateJobFailHandler,
+  },
+];
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -36,7 +67,18 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     const routeKey = `${req.method} ${url.pathname}`;
-    const handler = routes.get(routeKey);
+    let handler = routes.get(routeKey);
+
+    if (!handler) {
+      for (const dynamicRoute of dynamicRoutes) {
+        const match = req.method === dynamicRoute.method ? url.pathname.match(dynamicRoute.pattern) : null;
+        if (match) {
+          handler = dynamicRoute.handler;
+          req.query = { ...(req.query || {}), job_id: match[1] };
+          break;
+        }
+      }
+    }
 
     if (!handler) {
       res.statusCode = 404;

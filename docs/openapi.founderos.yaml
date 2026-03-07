@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Founderos APS v1
+  title: Founderos APS
   version: 1.0.0
   description: Minimal APS-aligned control plane for a Custom GPT action backend on Vercel.
 servers:
@@ -84,6 +84,17 @@ components:
               type: boolean
           required: [type, header, configured]
           additionalProperties: false
+        worker_auth:
+          type: object
+          properties:
+            type:
+              type: string
+            header:
+              type: string
+            configured:
+              type: boolean
+          required: [type, header, configured]
+          additionalProperties: false
         boundaries:
           type: object
           properties:
@@ -99,6 +110,8 @@ components:
               type: boolean
             server_side_secret_handling:
               type: boolean
+            worker_lane_separated:
+              type: boolean
           required:
             - narrow_commitment_boundary
             - planning_only_precommit
@@ -106,6 +119,7 @@ components:
             - protected_path_policy_enforced
             - witness_before_write_required
             - server_side_secret_handling
+            - worker_lane_separated
           additionalProperties: false
         protected_paths:
           type: array
@@ -125,10 +139,163 @@ components:
         - version
         - openapi
         - auth
+        - worker_auth
         - boundaries
         - protected_paths
         - allowed_repos
         - endpoints
+      additionalProperties: false
+    OrchestrateSubmitRequest:
+      type: object
+      properties:
+        user_request:
+          type: string
+        requested_by:
+          type: string
+        scope:
+          type: object
+          properties:
+            repo:
+              type: string
+            branch:
+              type: string
+            allowed_paths:
+              type: array
+              items:
+                type: string
+            forbidden_paths:
+              type: array
+              items:
+                type: string
+          additionalProperties: false
+        constraints:
+          type: array
+          items:
+            type: string
+      required: [user_request]
+      additionalProperties: false
+    OrchestrateSubmitResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        job:
+          type: object
+          properties:
+            job_id:
+              type: string
+              format: uuid
+            status:
+              type: string
+            artifact:
+              $ref: "#/components/schemas/PlanArtifact"
+          required: [job_id, status, artifact]
+          additionalProperties: false
+      required: [ok, job]
+      additionalProperties: false
+    OrchestrationJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        requested_by:
+          type: string
+        repo:
+          type:
+            - string
+            - "null"
+        user_request:
+          type: string
+        claimed_by:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_heartbeat_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        completed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        result_json:
+          type: object
+      required:
+        - id
+        - status
+        - requested_by
+        - repo
+        - user_request
+        - claimed_by
+        - created_at
+        - updated_at
+        - last_heartbeat_at
+        - completed_at
+        - result_json
+      additionalProperties: true
+    OrchestrationEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        job_id:
+          type: string
+          format: uuid
+        ts:
+          type: string
+          format: date-time
+        type:
+          type: string
+        actor:
+          type: string
+        payload:
+          type: object
+      required: [id, job_id, ts, type, actor, payload]
+      additionalProperties: true
+    OrchestrationArtifact:
+      type: object
+      properties:
+        id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        content_hash:
+          type: string
+        artifact_json:
+          type: object
+      required: [id, created_at, content_hash, artifact_json]
+      additionalProperties: true
+    OrchestrateJobStatusResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        job:
+          $ref: "#/components/schemas/OrchestrationJob"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrchestrationEvent"
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrchestrationArtifact"
+      required: [ok, job, events, artifacts]
       additionalProperties: false
     PrecommitPlanRequest:
       type: object
@@ -674,6 +841,105 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "405":
           description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/orchestrate/submit:
+    post:
+      operationId: orchestrateSubmit
+      summary: Queue an async orchestration job for the private worker lane
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrchestrateSubmitRequest"
+      responses:
+        "202":
+          description: Job accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrchestrateSubmitResponse"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing orchestration storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Orchestration persistence failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/orchestrate/jobs/{job_id}:
+    get:
+      operationId: orchestrateJobStatus
+      summary: Read durable status for one orchestration job
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Job status returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrchestrateJobStatusResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing orchestration storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Orchestration read failed
           content:
             application/json:
               schema:

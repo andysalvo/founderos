@@ -3,6 +3,7 @@ const { createHash } = require("crypto");
 const VERSION = "1.0.0";
 const SERVICE_NAME = "founderos-control-plane";
 const AUTH_HEADER = "x-founderos-key";
+const WORKER_AUTH_HEADER = "x-founderos-worker-key";
 const OPENAPI_PATH = "docs/openapi.founderos.yaml";
 const OPENAPI_VERSION = "3.1.0";
 
@@ -55,6 +56,20 @@ const ENDPOINTS = [
     path: "/api/founderos/commit/execute",
     auth: "apiKey",
     purpose: "Execute one exact, pre-authorized write set against an allowlisted GitHub repo.",
+  },
+  {
+    operationId: "orchestrateSubmit",
+    method: "POST",
+    path: "/api/founderos/orchestrate/submit",
+    auth: "apiKey",
+    purpose: "Create an async orchestration job for worker execution through APS.",
+  },
+  {
+    operationId: "orchestrateJobStatus",
+    method: "GET",
+    path: "/api/founderos/orchestrate/jobs/{job_id}",
+    auth: "apiKey",
+    purpose: "Read durable status, artifacts, and recent events for one orchestration job.",
   },
 ];
 
@@ -114,8 +129,16 @@ function requireMethod(req, res, method) {
 }
 
 function extractApiKey(req) {
+  return extractHeaderKey(req, AUTH_HEADER);
+}
+
+function extractWorkerKey(req) {
+  return extractHeaderKey(req, WORKER_AUTH_HEADER);
+}
+
+function extractHeaderKey(req, headerName) {
   const headers = req && req.headers ? req.headers : {};
-  const direct = typeof headers[AUTH_HEADER] === "string" ? headers[AUTH_HEADER].trim() : "";
+  const direct = typeof headers[headerName] === "string" ? headers[headerName].trim() : "";
   if (direct) {
     return direct;
   }
@@ -135,10 +158,18 @@ function extractApiKey(req) {
 }
 
 function detectAuthTransport(req) {
+  return detectHeaderTransport(req, AUTH_HEADER);
+}
+
+function detectWorkerAuthTransport(req) {
+  return detectHeaderTransport(req, WORKER_AUTH_HEADER);
+}
+
+function detectHeaderTransport(req, headerName) {
   const headers = req && req.headers ? req.headers : {};
-  const direct = typeof headers[AUTH_HEADER] === "string" ? headers[AUTH_HEADER].trim() : "";
+  const direct = typeof headers[headerName] === "string" ? headers[headerName].trim() : "";
   if (direct) {
-    return "x-founderos-key";
+    return headerName;
   }
 
   const authorization =
@@ -161,6 +192,21 @@ function requireApiKey(req, res) {
     error: "unauthorized",
     auth_received_via: detectAuthTransport(req),
     expected_key_configured: Boolean(process.env.FOUNDEROS_WRITE_KEY),
+  });
+  return false;
+}
+
+function requireWorkerKey(req, res) {
+  const provided = extractWorkerKey(req);
+  if (provided && provided === process.env.FOUNDEROS_WORKER_KEY) {
+    return true;
+  }
+
+  sendJson(res, 401, {
+    ok: false,
+    error: "worker_unauthorized",
+    auth_received_via: detectWorkerAuthTransport(req),
+    expected_key_configured: Boolean(process.env.FOUNDEROS_WORKER_KEY),
   });
   return false;
 }
@@ -309,6 +355,11 @@ function buildCapabilitiesResponse() {
       header: AUTH_HEADER,
       configured: Boolean(process.env.FOUNDEROS_WRITE_KEY),
     },
+    worker_auth: {
+      type: "apiKey",
+      header: WORKER_AUTH_HEADER,
+      configured: Boolean(process.env.FOUNDEROS_WORKER_KEY),
+    },
     boundaries: {
       narrow_commitment_boundary: true,
       planning_only_precommit: true,
@@ -316,6 +367,7 @@ function buildCapabilitiesResponse() {
       protected_path_policy_enforced: true,
       witness_before_write_required: true,
       server_side_secret_handling: true,
+      worker_lane_separated: true,
     },
     protected_paths: [
       "api/founderos/**",
@@ -331,6 +383,7 @@ function buildCapabilitiesResponse() {
 
 module.exports = {
   AUTH_HEADER,
+  WORKER_AUTH_HEADER,
   ENDPOINTS,
   OPENAPI_PATH,
   OPENAPI_VERSION,
@@ -339,13 +392,17 @@ module.exports = {
   buildCapabilitiesResponse,
   buildPlanArtifact,
   detectAuthTransport,
+  detectWorkerAuthTransport,
   extractApiKey,
+  extractWorkerKey,
   getAllowedRepos,
   hashJson,
   isPlainObject,
   isProtectedPath,
+  normalizeStringList,
   parseJsonBody,
   requireApiKey,
+  requireWorkerKey,
   requireMethod,
   sendJson,
 };
