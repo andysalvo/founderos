@@ -72,6 +72,13 @@ const activeSurface = files
   .map((file) => file.path)
   .sort();
 const repo = job.repo || (job.scope_json && job.scope_json.repo) || null;
+const objective =
+  typeof job.user_request === "string"
+    ? job.user_request.trim()
+    : typeof claim.user_request === "string"
+      ? claim.user_request.trim()
+      : "";
+
 const desiredActivationDoc = [
   "# OpenClaw APS Activation",
   "",
@@ -207,6 +214,23 @@ function hasLiveWorkerAuthMarkers(text) {
   );
 }
 
+function inferLane(objectiveText) {
+  const text = typeof objectiveText === "string" ? objectiveText.toLowerCase() : "";
+  if (text.includes("security") || text.includes("authority") || text.includes("hardening")) {
+    return "security";
+  }
+  if (text.includes("reliability") || text.includes("recovery") || text.includes("systemd") || text.includes("operations")) {
+    return "operations";
+  }
+  if (text.includes("workflow") || text.includes("business") || text.includes("project") || text.includes("task") || text.includes("document")) {
+    return "workflow";
+  }
+  if (text.includes("research") || text.includes("ledger") || text.includes("stripe") || text.includes("payment")) {
+    return "research";
+  }
+  return "general";
+}
+
 function buildImprovementProposal({ repo, activationText, desiredActivationDoc }) {
   if (!hasLiveWorkerAuthMarkers(activationText)) {
     return {
@@ -255,57 +279,98 @@ function buildImprovementProposal({ repo, activationText, desiredActivationDoc }
   }
 
   return {
-      kind: "safe_improvement_proposal",
-      title: "Tighten worker recommendation freshness and add regression coverage",
-      priority: "high",
+    kind: "safe_improvement_proposal",
+    title: "Upgrade the worker from inspect-and-report to inspect-and-propose",
+    priority: "high",
+    rationale:
+      "The system can inspect and report on itself, but it still lacks a structured inspect-and-propose contract that is ready for ledger promotion and later PR translation.",
+    risk_level: "low",
+    target_area: "services/openclaw result shaping and promotion-ready structured output",
+    target_files: [
+      "services/openclaw/worker-loop.sh",
+      "tests/founderos-v1-contract.test.mjs",
+    ],
+    proposed_changes: [
+      "Infer a lane from the job objective so repeated inspection jobs become easier to classify.",
+      "Return a structured worker output object with required fields for summary, findings, tags, importance, promotion recommendation, and ledger-entry stubbing.",
+      "Keep the bounded proposal block while making completed results easier to mirror into the outputs ledger.",
+    ],
+    acceptance_criteria: [
+      "Completed worker results include a structured output object with lane, objective, summary, key findings, tags, importance, promotion recommendation, and ledger entry stub.",
+      "Structured output remains inside the current PR-only guarded execution model and does not widen authority.",
+      "Regression coverage verifies lane inference, structured output shape, and the docs-alignment fallback.",
+    ],
+    expected_outcome:
+      "Founderos receives worker outputs that are easier to index, mirror, and act on without requiring manual reinterpretation every time.",
+    candidate_write_set: {
+      mode: "exact_write_set_candidate",
+      repo,
+      branch_name: "codex/worker-inspect-and-propose-contract",
+      base_branch: "main",
+      title: "Upgrade OpenClaw to a structured inspect-and-propose contract",
       rationale:
-        "The worker should stop repeating already-landed docs recommendations and instead return the next real bounded improvement.",
-      risk_level: "low",
-      target_area: "services/openclaw worker recommendation logic and regression coverage",
-      target_files: [
-        "services/openclaw/worker-loop.sh",
-        "tests/founderos-v1-contract.test.mjs",
+        "A structured inspect-and-propose contract makes worker outputs easier to promote into the outputs ledger and easier to turn into bounded implementation tracks.",
+      files: [
+        {
+          path: "services/openclaw/worker-loop.sh",
+          action: "update",
+          intent: "Add lane-aware structured output fields alongside the bounded proposal block.",
+        },
+        {
+          path: "tests/founderos-v1-contract.test.mjs",
+          action: "update",
+          intent: "Add regression coverage for lane inference and structured output shape.",
+        },
       ],
-      proposed_changes: [
-        "Detect when the live worker-auth docs markers are already present.",
-        "Suppress the stale docs-alignment recommendation in that state.",
-        "Add regression coverage for recommendation freshness in the active test suite.",
-      ],
-      acceptance_criteria: [
-        "When the activation doc already contains live worker-auth markers, the worker does not recommend the docs-alignment fix again.",
-        "The returned bounded proposal points at worker-loop freshness logic and regression coverage.",
-        "The change stays within the current APS boundary and avoids protected paths.",
-      ],
-      expected_outcome:
-        "Founderos recommends the next real low-risk self-improvement instead of repeating stale docs work.",
-      candidate_write_set: {
-        mode: "exact_write_set_candidate",
-        repo,
-        branch_name: "codex/worker-recommendation-freshness",
-        base_branch: "main",
-        title: "Improve worker recommendation freshness for Founderos",
-        rationale:
-          "Once the worker-auth docs fix has landed, the worker should recommend the next bounded improvement instead of repeating stale docs work.",
-        files: [
-          {
-            path: "services/openclaw/worker-loop.sh",
-            action: "update",
-            intent: "Make recommendation selection freshness-aware when docs markers are already present.",
-          },
-          {
-            path: "tests/founderos-v1-contract.test.mjs",
-            action: "update",
-            intent: "Add regression coverage for recommendation freshness.",
-          },
-        ],
-      },
-    };
+    },
+  };
+}
+
+function buildStructuredOutput({ job, repo, topPaths, activeSurface, improvementProposal }) {
+  const lane = inferLane(objective);
+  const keyFindings = [
+    "APS remains the authority boundary and durable write gate.",
+    "OpenClaw can claim, inspect, and complete jobs through the current async loop.",
+    improvementProposal.title,
+  ];
+  const tags = Array.from(
+    new Set(
+      [lane, "openclaw", "outputs-ledger", "inspect-and-propose", repo ? "repo" : null].filter(Boolean)
+    )
+  );
+  return {
+    lane,
+    objective,
+    status: "completed",
+    summary: "OpenClaw inspected the repo and returned a structured bounded proposal ready for easier ledger promotion.",
+    key_findings: keyFindings,
+    tags,
+    importance: "high",
+    promotion_recommended: true,
+    ledger_entry_stub: {
+      job_id: job.id || null,
+      repo,
+      title: improvementProposal.title,
+      focus: lane,
+      summary: improvementProposal.rationale,
+      completed_at: new Date().toISOString(),
+      top_paths: topPaths.slice(0, 5),
+    },
+    active_surface_sample: activeSurface.slice(0, 5),
+  };
 }
 
 const improvementProposal = buildImprovementProposal({
   repo,
   activationText,
   desiredActivationDoc,
+});
+const structuredOutput = buildStructuredOutput({
+  job,
+  repo,
+  topPaths,
+  activeSurface,
+  improvementProposal,
 });
 const selfState = {
   identity: {
@@ -337,6 +402,7 @@ const result = {
   summary: "Initial worker self-state inspection completed with a bounded proposal block.",
   result: {
     repo,
+    objective,
     file_count: files.length,
     top_paths: topPaths,
     recommended_next_action:
@@ -344,6 +410,7 @@ const result = {
     readme_excerpt: readmeLines,
     activation_doc_excerpt: activationLines,
     self_state: selfState,
+    structured_output: structuredOutput,
     proposal: {
       status: "bounded_candidate_ready",
       mode: improvementProposal.candidate_write_set && improvementProposal.candidate_write_set.mode
