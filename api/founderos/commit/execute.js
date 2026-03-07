@@ -87,6 +87,7 @@ module.exports = async (req, res) => {
       ok: false,
       error: err && err.code ? err.code : "internal_error",
       ...(err && err.path ? { path: err.path } : {}),
+      ...(err && err.stage ? { stage: err.stage } : {}),
       ...(err && err.code === "github_api_error" && err.message
         ? { detail: err.message }
         : {}),

@@ -185,25 +185,43 @@ async function executeWriteSet({
   const witnessInserted = await insertRow(config, "witness_events", witnessRow);
   const witnessId = witnessInserted && witnessInserted.id ? witnessInserted.id : witnessRow.id;
 
-  const installationToken = await getInstallationToken(appId, installationId, privateKey);
-  const baseRef = await githubRequest(
-    installationToken,
-    "GET",
-    `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/git/ref/heads/${encodeURIComponent(
-      writeSet.base_branch
-    )}`
-  );
+  let installationToken;
+  try {
+    installationToken = await getInstallationToken(appId, installationId, privateKey);
+  } catch (err) {
+    err.stage = "github_auth";
+    throw err;
+  }
+
+  let baseRef;
+  try {
+    baseRef = await githubRequest(
+      installationToken,
+      "GET",
+      `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/git/ref/heads/${encodeURIComponent(
+        writeSet.base_branch
+      )}`
+    );
+  } catch (err) {
+    err.stage = "read_base_ref";
+    throw err;
+  }
   const baseSha = baseRef && baseRef.object && baseRef.object.sha;
 
-  await githubRequest(
-    installationToken,
-    "POST",
-    `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/git/refs`,
-    {
-      ref: `refs/heads/${writeSet.branch_name}`,
-      sha: baseSha,
-    }
-  );
+  try {
+    await githubRequest(
+      installationToken,
+      "POST",
+      `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/git/refs`,
+      {
+        ref: `refs/heads/${writeSet.branch_name}`,
+        sha: baseSha,
+      }
+    );
+  } catch (err) {
+    err.stage = "create_branch";
+    throw err;
+  }
 
   for (const file of writeSet.files) {
     const encodedPath = encodePathForGitHub(file.path);
@@ -211,6 +229,38 @@ async function executeWriteSet({
     const encodedContent = Buffer.from(file.content, "utf8").toString("base64");
 
     if (file.action === "create") {
+      try {
+        await githubRequest(
+          installationToken,
+          "PUT",
+          `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/contents/${encodedPath}`,
+          {
+            message,
+            content: encodedContent,
+            branch: writeSet.branch_name,
+          }
+        );
+      } catch (err) {
+        err.stage = `create_file:${file.path}`;
+        throw err;
+      }
+      continue;
+    }
+
+    let existing;
+    try {
+      existing = await githubRequest(
+        installationToken,
+        "GET",
+        `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/contents/${encodedPath}?ref=${encodeURIComponent(
+          writeSet.branch_name
+        )}`
+      );
+    } catch (err) {
+      err.stage = `read_existing_file:${file.path}`;
+      throw err;
+    }
+    try {
       await githubRequest(
         installationToken,
         "PUT",
@@ -219,29 +269,13 @@ async function executeWriteSet({
           message,
           content: encodedContent,
           branch: writeSet.branch_name,
+          sha: existing.sha,
         }
       );
-      continue;
+    } catch (err) {
+      err.stage = `update_file:${file.path}`;
+      throw err;
     }
-
-    const existing = await githubRequest(
-      installationToken,
-      "GET",
-      `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/contents/${encodedPath}?ref=${encodeURIComponent(
-        writeSet.branch_name
-      )}`
-    );
-    await githubRequest(
-      installationToken,
-      "PUT",
-      `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/contents/${encodedPath}`,
-      {
-        message,
-        content: encodedContent,
-        branch: writeSet.branch_name,
-        sha: existing.sha,
-      }
-    );
   }
 
   const prRequest = {
@@ -253,12 +287,18 @@ async function executeWriteSet({
     prRequest.body = writeSet.body;
   }
 
-  const pullRequest = await githubRequest(
-    installationToken,
-    "POST",
-    `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/pulls`,
-    prRequest
-  );
+  let pullRequest;
+  try {
+    pullRequest = await githubRequest(
+      installationToken,
+      "POST",
+      `/repos/${encodeURIComponent(validation.owner)}/${encodeURIComponent(validation.repo)}/pulls`,
+      prRequest
+    );
+  } catch (err) {
+    err.stage = "create_pull_request";
+    throw err;
+  }
 
   return {
     execution: {
