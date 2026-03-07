@@ -2,6 +2,21 @@
 
 Private founder operating system with a verified APS control-plane seed and a live async worker loop.
 
+## Governance
+
+Founderos is not fully legible from the product description, API surface, worker wiring, or deployment docs alone.
+
+To understand what Founderos is, how its powers are bounded, how OpenClaw tooling may be added safely over time, and how the system is intended to grow into a broader agentic workflow standard, read the governance corpus before widening agency:
+
+- `docs/governance/README.md`
+- `docs/governance/PRE_CONSTITUTION_RESEARCH_CORPUS.md`
+- `docs/governance/CONSTITUTION.md`
+- `docs/governance/amendments/README.md`
+- active amendments in `docs/governance/amendments/`
+- relevant governance decisions in `memory/decisions/`
+
+This governance layer should be treated as required reading before adding OpenClaw tools, broadening execution autonomy, or interpreting Founderos as a general autonomous agent.
+
 First read: [docs/FOUNDEROS_SYSTEM_SPEC.md](/Users/andysalvo_1/Documents/GitHub/founderos/docs/FOUNDEROS_SYSTEM_SPEC.md)
 
 Current live snapshot: [docs/FOUNDEROS_LIVE_STATE.md](/Users/andysalvo_1/Documents/GitHub/founderos/docs/FOUNDEROS_LIVE_STATE.md)
