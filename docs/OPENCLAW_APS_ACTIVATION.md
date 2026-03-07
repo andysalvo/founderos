@@ -50,25 +50,36 @@ EOF
 chmod 600 /root/.config/founderos/aps.env
 ```
 
-## Helper script
+## Helper scripts
 
-This repo includes a helper at:
+This repo includes helpers at:
 
 - [`services/openclaw/aps-client.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/aps-client.sh)
+- [`services/openclaw/extract-candidate-write-set.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/extract-candidate-write-set.sh)
+- [`services/openclaw/freeze-candidate.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/freeze-candidate.sh)
 
-It supports:
+`aps-client.sh` supports:
 
 - `capabilities`
 - `plan`
 - `repo-file`
 - `repo-tree`
-- `submit`
+- `freeze`
+- `execute`
 - `merge-pr`
+- `submit`
 - `job-status`
 - `claim`
 - `heartbeat`
 - `complete`
 - `fail`
+
+The new helper scripts support:
+
+- extracting an exact worker `candidate_write_set` from a completed job,
+- and freezing that exact candidate into a governed APS write-set artifact when the candidate already includes exact file content.
+
+This keeps APS as the authority boundary while making it much faster to promote low-risk worker output into a governed PR path.
 
 ## Worker loop startup
 
@@ -102,6 +113,15 @@ Async job verification:
 2. Wait for the worker loop to claim it.
 3. Poll `orchestrate/jobs/{job_id}` for durable status and result.
 
+Promotion helper verification:
+
+```bash
+bash services/openclaw/extract-candidate-write-set.sh <job_id>
+bash services/openclaw/freeze-candidate.sh <job_id> <frozen_by>
+```
+
+If the worker candidate is intent-only and does not contain exact file contents yet, the freeze helper will fail closed instead of widening authority implicitly.
+
 ## How execution stays safe
 
 - APS checks the repo allowlist.
@@ -118,6 +138,7 @@ Use Founderos like this:
 1. Submit a bounded async job from ChatGPT through public APS.
 2. Let OpenClaw claim and inspect privately on the VM.
 3. Review the returned proposal or write set.
-4. Approve the resulting PR through GitHub when the change is acceptable.
+4. If the worker returned an exact candidate, promote it through the helper path into a governed artifact.
+5. Approve the resulting PR through GitHub when the change is acceptable.
 
 That is the current safe path from chat intent to bounded self-improvement.
