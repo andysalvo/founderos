@@ -60,10 +60,10 @@ This loop has been verified end to end:
 3. OpenClaw worker on the VM claims the job through worker auth.
 4. Worker reads the repo tree and README through APS.
 5. Worker posts heartbeat updates.
-6. Worker completes the job with a structured inspection result.
+6. Worker completes the job with a structured inspection result and a dedicated bounded proposal block.
 7. APS returns durable status, events, artifacts, and result payload by `job_id`.
 
-This means Founderos now has a real autonomous inspect-and-report loop that runs without the laptop terminal staying open.
+This means Founderos now has a real autonomous inspect-and-propose loop seed that runs without the laptop terminal staying open.
 
 ## Current Worker Behavior
 
@@ -73,7 +73,8 @@ Current worker mode:
 - claim one job
 - inspect the repo tree
 - inspect `README.md`
-- return a structured self-state snapshot and a bounded next-improvement proposal
+- return a structured self-state snapshot
+- return a dedicated bounded proposal block with rationale, target files, acceptance criteria, and a candidate write-set scaffold
 
 Current worker does not yet:
 
@@ -107,7 +108,7 @@ The system is autonomous only inside these constraints:
 - policy-bearing artifacts are explicitly classified and not treated as ordinary content
 - durable code writes still require governed APS execution
 - governed PR merge exists, but only as an explicit human-directed APS call
-- current async worker loop inspects and reports but does not directly self-modify
+- current async worker loop prepares bounded proposal scaffolds but does not directly self-modify
 - consequential changes should still end in reviewable PRs
 
 ## Immediate Next Step
@@ -129,3 +130,4 @@ The worker is now moving toward the first half of that loop by returning:
 - rationale
 - acceptance criteria
 - a candidate write-set scaffold
+- a dedicated bounded proposal block that can be promoted into the safer freeze -> execute path

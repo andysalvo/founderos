@@ -137,6 +137,9 @@ const desiredActivationDoc = [
   "- `plan`",
   "- `repo-file`",
   "- `repo-tree`",
+  "- `freeze`",
+  "- `execute`",
+  "- `merge-pr`",
   "- `submit`",
   "- `job-status`",
   "- `claim`",
@@ -276,7 +279,7 @@ function buildImprovementProposal({ repo, activationText, desiredActivationDoc }
       expected_outcome:
         "Founderos recommends the next real low-risk self-improvement instead of repeating stale docs work.",
       candidate_write_set: {
-        mode: "proposal_only",
+        mode: "exact_write_set_candidate",
         repo,
         branch_name: "codex/worker-recommendation-freshness",
         base_branch: "main",
@@ -320,7 +323,7 @@ const selfState = {
   },
   capabilities: {
     active_surface: activeSurface,
-    worker_loop_mode: "inspect_and_report",
+    worker_loop_mode: "inspect_and_propose",
     protected_write_boundary: "PR-only governed execution through APS",
   },
   current_limitations: [
@@ -331,7 +334,7 @@ const selfState = {
 };
 
 const result = {
-  summary: "Initial worker self-state inspection completed.",
+  summary: "Initial worker self-state inspection completed with a bounded proposal block.",
   result: {
     repo,
     file_count: files.length,
@@ -341,6 +344,17 @@ const result = {
     readme_excerpt: readmeLines,
     activation_doc_excerpt: activationLines,
     self_state: selfState,
+    proposal: {
+      status: "bounded_candidate_ready",
+      mode: improvementProposal.candidate_write_set && improvementProposal.candidate_write_set.mode
+        ? improvementProposal.candidate_write_set.mode
+        : "proposal_only",
+      title: improvementProposal.title,
+      rationale: improvementProposal.rationale,
+      target_files: improvementProposal.target_files,
+      acceptance_criteria: improvementProposal.acceptance_criteria,
+      candidate_write_set: improvementProposal.candidate_write_set || null,
+    },
     suggested_next_improvement: improvementProposal,
   },
 };
@@ -384,7 +398,7 @@ inspect_job() {
   FOUNDEROS_ACTIVATION_DOC_JSON="${activation_doc_json}" \
   build_result_payload "${claimed_json}" "${payload_file}"
 
-  post_status "${job_id}" "write_set_ready" "Inspection summary prepared" 0.9
+  post_status "${job_id}" "write_set_ready" "Inspection summary prepared with bounded proposal block" 0.9
   if [[ ! -s "${payload_file}" ]]; then
     echo "Worker payload generation failed for ${job_id}" >&2
     fail_job "${job_id}" "${payload_file}"

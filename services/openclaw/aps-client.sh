@@ -18,7 +18,7 @@ if [[ -z "${WRITE_KEY}" ]]; then
 fi
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <capabilities|plan|repo-file|repo-tree|execute|merge-pr|submit|job-status|claim|heartbeat|complete|fail> [args...]" >&2
+  echo "usage: $0 <capabilities|plan|repo-file|repo-tree|freeze|execute|merge-pr|submit|job-status|claim|heartbeat|complete|fail> [args...]" >&2
   exit 1
 fi
 
@@ -109,6 +109,15 @@ case "${cmd}" in
     curl -sS "${auth_header[@]}" \
       -d "{\"repo\":${repo_json},\"ref\":${ref_json},\"path_prefix\":${prefix_json},\"limit\":${limit}}" \
       "${BASE_URL}/api/founderos/repo/tree"
+    ;;
+  freeze)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 freeze /path/to/payload.json" >&2
+      exit 1
+    fi
+    curl -sS "${auth_header[@]}" \
+      --data @"$1" \
+      "${BASE_URL}/api/founderos/commit/freeze-write-set"
     ;;
   execute)
     if [[ $# -lt 1 ]]; then
