@@ -54,7 +54,7 @@ build_result_payload() {
 
   JOB_JSON="${job_json}" node -e '
 const fs = require("fs");
-const targetPath = process.argv[2];
+const targetPath = process.argv[1];
 const job = JSON.parse(process.env.JOB_JSON || "{}");
 const tree = JSON.parse(process.env.FOUNDEROS_TREE_JSON || "{}");
 const readme = JSON.parse(process.env.FOUNDEROS_README_JSON || "{}");
@@ -109,6 +109,12 @@ inspect_job() {
   build_result_payload "${claimed_json}" "${payload_file}"
 
   post_status "${job_id}" "write_set_ready" "Inspection summary prepared" 0.9
+  if [[ ! -s "${payload_file}" ]]; then
+    echo "Worker payload generation failed for ${job_id}" >&2
+    fail_job "${job_id}" "${payload_file}"
+    rm -f "${payload_file}"
+    return 1
+  fi
   complete_job "${job_id}" "${payload_file}"
   rm -f "${payload_file}"
 }
