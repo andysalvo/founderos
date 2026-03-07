@@ -1,49 +1,12 @@
-const { randomUUID } = require("crypto");
 const {
-  getAllowedRepos,
   hashJson,
   isPlainObject,
-  isProtectedPath,
   parseJsonBody,
   requireApiKey,
   requireMethod,
   sendJson,
 } = require("../../_lib/founderos-v1");
-const {
-  encodePathForGitHub,
-  getInstallationToken,
-  githubRequest,
-} = require("../../_lib/github");
-
-async function insertWitnessEvent(row, supabaseUrl, serviceRoleKey) {
-  const response = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/rest/v1/witness_events`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      apikey: serviceRoleKey,
-      authorization: `Bearer ${serviceRoleKey}`,
-      prefer: "return=representation",
-    },
-    body: JSON.stringify(row),
-  });
-
-  if (!response.ok) {
-    const error = new Error(`Supabase REST ${response.status}`);
-    error.code = "supabase_insert_failed";
-    throw error;
-  }
-
-  try {
-    const inserted = await response.json();
-    if (Array.isArray(inserted) && inserted[0] && inserted[0].id) {
-      return inserted[0].id;
-    }
-  } catch (_err) {
-    // Keep generated id when the REST API returns no JSON body.
-  }
-
-  return row.id;
-}
+const { executeWriteSet, validateWriteSet } = require("../../_lib/commit-execution");
 
 module.exports = async (req, res) => {
   try {
@@ -64,32 +27,17 @@ module.exports = async (req, res) => {
     const writeSet = body.write_set;
     const authorization = body.authorization;
 
-    if (!isPlainObject(writeSet)) {
-      return sendJson(res, 400, { ok: false, error: "write_set_required" });
+    const validation = validateWriteSet(writeSet);
+    if (!validation.ok) {
+      return sendJson(res, validation.statusCode || 400, {
+        ok: false,
+        error: validation.error,
+        ...(validation.path ? { path: validation.path } : {}),
+      });
     }
 
     if (!isPlainObject(authorization)) {
       return sendJson(res, 400, { ok: false, error: "authorization_required" });
-    }
-
-    if (typeof writeSet.branch_name !== "string" || writeSet.branch_name.length === 0) {
-      return sendJson(res, 400, { ok: false, error: "branch_name_required" });
-    }
-
-    if (typeof writeSet.base_branch !== "string" || writeSet.base_branch.length === 0) {
-      return sendJson(res, 400, { ok: false, error: "base_branch_required" });
-    }
-
-    if (typeof writeSet.title !== "string" || writeSet.title.length === 0) {
-      return sendJson(res, 400, { ok: false, error: "title_required" });
-    }
-
-    if (typeof writeSet.repo !== "string" || writeSet.repo.length === 0) {
-      return sendJson(res, 400, { ok: false, error: "repo_required" });
-    }
-
-    if (!Array.isArray(writeSet.files) || writeSet.files.length === 0) {
-      return sendJson(res, 400, { ok: false, error: "files_required" });
     }
 
     if (
@@ -124,270 +72,24 @@ module.exports = async (req, res) => {
       return sendJson(res, 400, { ok: false, error: "write_set_hash_mismatch" });
     }
 
-    const seenPaths = new Set();
-    for (const file of writeSet.files) {
-      if (!isPlainObject(file)) {
-        return sendJson(res, 400, { ok: false, error: "invalid_file_entry" });
-      }
-
-      if (
-        typeof file.path !== "string" ||
-        file.path.length === 0 ||
-        typeof file.content !== "string" ||
-        typeof file.action !== "string" ||
-        file.action.length === 0
-      ) {
-        return sendJson(res, 400, { ok: false, error: "invalid_file_entry" });
-      }
-
-      if (file.action !== "create" && file.action !== "update") {
-        return sendJson(res, 400, { ok: false, error: "invalid_file_action" });
-      }
-
-      if (file.path.includes("..")) {
-        return sendJson(res, 400, { ok: false, error: "path_traversal_rejected" });
-      }
-
-      if (file.path.startsWith("/")) {
-        return sendJson(res, 400, { ok: false, error: "absolute_path_rejected" });
-      }
-
-      if (seenPaths.has(file.path)) {
-        return sendJson(res, 400, { ok: false, error: "duplicate_paths_rejected" });
-      }
-
-      seenPaths.add(file.path);
-
-      if (isProtectedPath(file.path)) {
-        return sendJson(res, 403, {
-          ok: false,
-          error: "protected_path",
-          path: file.path,
-        });
-      }
-    }
-
-    const allowedRepos = getAllowedRepos();
-    if (!allowedRepos.includes(writeSet.repo)) {
-      return sendJson(res, 403, { ok: false, error: "repo_not_allowed" });
-    }
-
-    const repoParts = writeSet.repo.split("/");
-    if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
-      return sendJson(res, 400, { ok: false, error: "repo_required" });
-    }
-
-    const appId = process.env.GITHUB_APP_ID;
-    const installationId = process.env.GITHUB_INSTALLATION_ID;
-    const privateKey = (process.env.GITHUB_APP_PRIVATE_KEY || "").replace(/\\n/g, "\n");
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!appId || !installationId || !privateKey.trim()) {
-      return sendJson(res, 500, { ok: false, error: "github_not_configured" });
-    }
-
-    if (!supabaseUrl || !supabaseKey) {
-      return sendJson(res, 500, { ok: false, error: "witness_not_configured" });
-    }
-
-    const owner = repoParts[0];
-    const repo = repoParts[1];
-
-    const witnessRow = {
-      id: randomUUID(),
-      ts: new Date().toISOString(),
-      type: "commit.execution_authorized",
-      commit_id: null,
-      artifact_id: authorization.plan_artifact_id,
+    const executed = await executeWriteSet({
+      writeSet,
       actor: authorization.authorized_by,
-      payload: {
-        repo: writeSet.repo,
-        base_branch: writeSet.base_branch,
-        branch_name: writeSet.branch_name,
-        title: writeSet.title,
-        body_present: typeof writeSet.body === "string" && writeSet.body.length > 0,
-        plan_artifact_hash: authorization.plan_artifact_hash,
-        write_set_hash: authorization.write_set_hash,
-        file_count: writeSet.files.length,
-        files: writeSet.files.map((file) => ({
-          path: file.path,
-          action: file.action,
-          content_sha256: hashJson({ content: file.content }),
-        })),
-      },
-    };
-    witnessRow.content_hash = hashJson({
-      ts: witnessRow.ts,
-      type: witnessRow.type,
-      commit_id: witnessRow.commit_id,
-      artifact_id: witnessRow.artifact_id,
-      actor: witnessRow.actor,
-      payload: witnessRow.payload,
+      artifactId: authorization.plan_artifact_id,
+      planArtifactHash: authorization.plan_artifact_hash,
+      witnessType: "commit.execution_authorized",
+      docsOnly: false,
     });
 
-    let witnessId;
-    try {
-      witnessId = await insertWitnessEvent(witnessRow, supabaseUrl, supabaseKey);
-    } catch (_err) {
-      return sendJson(res, 502, { ok: false, error: "witness_insert_failed" });
-    }
-
-    let installationToken;
-    try {
-      installationToken = await getInstallationToken(appId, installationId, privateKey);
-    } catch (err) {
-      return sendJson(res, 502, {
-        ok: false,
-        error: "github_api_error",
-        detail: err && err.message ? err.message : "GitHub authentication failed",
-      });
-    }
-
-    let baseRef;
-    try {
-      baseRef = await githubRequest(
-        installationToken,
-        "GET",
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${encodeURIComponent(
-          writeSet.base_branch
-        )}`
-      );
-    } catch (err) {
-      return sendJson(res, 502, {
-        ok: false,
-        error: "github_api_error",
-        detail: err && err.message ? err.message : "Failed to read base branch",
-      });
-    }
-
-    const baseSha = baseRef && baseRef.object && baseRef.object.sha;
-
-    try {
-      await githubRequest(
-        installationToken,
-        "POST",
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs`,
-        {
-          ref: `refs/heads/${writeSet.branch_name}`,
-          sha: baseSha,
-        }
-      );
-    } catch (err) {
-      return sendJson(res, 502, {
-        ok: false,
-        error: "github_api_error",
-        detail: err && err.message ? err.message : "Failed to create branch",
-      });
-    }
-
-    for (const file of writeSet.files) {
-      const encodedPath = encodePathForGitHub(file.path);
-      const message = `founderos commit.execute ${file.action} ${file.path}`;
-      const encodedContent = Buffer.from(file.content, "utf8").toString("base64");
-
-      if (file.action === "create") {
-        try {
-          await githubRequest(
-            installationToken,
-            "PUT",
-            `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}`,
-            {
-              message,
-              content: encodedContent,
-              branch: writeSet.branch_name,
-            }
-          );
-        } catch (err) {
-          return sendJson(res, 502, {
-            ok: false,
-            error: "github_api_error",
-            detail: err && err.message ? err.message : "Failed to create file",
-          });
-        }
-      }
-
-      if (file.action === "update") {
-        let existing;
-        try {
-          existing = await githubRequest(
-            installationToken,
-            "GET",
-            `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}?ref=${encodeURIComponent(
-              writeSet.branch_name
-            )}`
-          );
-        } catch (err) {
-          return sendJson(res, 502, {
-            ok: false,
-            error: "github_api_error",
-            detail: err && err.message ? err.message : "Failed to read existing file for update",
-          });
-        }
-
-        try {
-          await githubRequest(
-            installationToken,
-            "PUT",
-            `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}`,
-            {
-              message,
-              content: encodedContent,
-              branch: writeSet.branch_name,
-              sha: existing.sha,
-            }
-          );
-        } catch (err) {
-          return sendJson(res, 502, {
-            ok: false,
-            error: "github_api_error",
-            detail: err && err.message ? err.message : "Failed to update file",
-          });
-        }
-      }
-    }
-
-    const prRequest = {
-      title: writeSet.title,
-      head: writeSet.branch_name,
-      base: writeSet.base_branch,
-    };
-    if (typeof writeSet.body === "string") {
-      prRequest.body = writeSet.body;
-    }
-
-    let pullRequest;
-    try {
-      pullRequest = await githubRequest(
-        installationToken,
-        "POST",
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
-        prRequest
-      );
-    } catch (err) {
-      return sendJson(res, 502, {
-        ok: false,
-        error: "github_api_error",
-        detail: err && err.message ? err.message : "Failed to create pull request",
-      });
-    }
-
-    return sendJson(res, 200, {
-      ok: true,
-      execution: {
-        pr_url: pullRequest.html_url,
-        pr_number: pullRequest.number,
-        branch: writeSet.branch_name,
-        repo: writeSet.repo,
-        files_written: writeSet.files.length,
-        write_set_hash: authorization.write_set_hash,
-      },
-      witness: {
-        id: witnessId,
-        type: witnessRow.type,
-      },
+    return sendJson(res, 200, { ok: true, ...executed });
+  } catch (err) {
+    return sendJson(res, err && err.statusCode ? err.statusCode : 500, {
+      ok: false,
+      error: err && err.code ? err.code : "internal_error",
+      ...(err && err.path ? { path: err.path } : {}),
+      ...(err && err.code === "github_api_error" && err.message
+        ? { detail: err.message }
+        : {}),
     });
-  } catch (_err) {
-    return sendJson(res, 500, { ok: false, error: "internal_error" });
   }
 };

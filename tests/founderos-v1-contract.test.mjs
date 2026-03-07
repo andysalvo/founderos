@@ -13,6 +13,7 @@ const precommitPlanHandler = require("../api/founderos/precommit/plan.js");
 const repoFileHandler = require("../api/founderos/repo/file.js");
 const repoTreeHandler = require("../api/founderos/repo/tree.js");
 const commitExecuteHandler = require("../api/founderos/commit/execute.js");
+const commitAutoExecuteHandler = require("../api/founderos/commit/auto-execute.js");
 const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit.js");
 const orchestrateJobStatusHandler = require("../api/founderos/orchestrate/jobs/[job_id].js");
 const orchestrateClaimHandler = require("../api/founderos/orchestrate/claim.js");
@@ -196,6 +197,53 @@ test("worker claim requires the worker key", async () => {
 
   assert.equal(response.statusCode, 401);
   assert.equal(response.json.error, "worker_unauthorized");
+});
+
+test("commit.auto-execute requires the worker key", async () => {
+  process.env.FOUNDEROS_WORKER_KEY = "worker-key";
+
+  const response = await invoke(commitAutoExecuteHandler, {
+    method: "POST",
+    headers: {},
+    body: {},
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json.error, "worker_unauthorized");
+});
+
+test("commit.auto-execute rejects non-doc paths", async () => {
+  process.env.FOUNDEROS_WORKER_KEY = "worker-key";
+  process.env.ALLOWED_REPOS = "owner/repo";
+
+  const writeSet = {
+    branch_name: "codex/test-docs-only",
+    base_branch: "main",
+    title: "Test auto execute",
+    repo: "owner/repo",
+    files: [
+      {
+        path: "services/openclaw/worker-loop.sh",
+        action: "update",
+        content: "echo nope",
+      },
+    ],
+  };
+
+  const response = await invoke(commitAutoExecuteHandler, {
+    method: "POST",
+    headers: { "x-founderos-worker-key": "worker-key" },
+    body: {
+      write_set: writeSet,
+      candidate: {
+        mode: "exact_write_set_candidate",
+        title: "Unsafe candidate",
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json.error, "auto_execute_docs_only");
 });
 
 test("repo.file rejects repos outside the allowlist before external calls", async () => {

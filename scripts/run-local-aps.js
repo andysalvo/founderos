@@ -9,6 +9,7 @@ const precommitPlanHandler = require("../api/founderos/precommit/plan");
 const repoFileHandler = require("../api/founderos/repo/file");
 const repoTreeHandler = require("../api/founderos/repo/tree");
 const commitExecuteHandler = require("../api/founderos/commit/execute");
+const commitAutoExecuteHandler = require("../api/founderos/commit/auto-execute");
 const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit");
 const orchestrateClaimHandler = require("../api/founderos/orchestrate/claim");
 const orchestrateJobStatusHandler = require("../api/founderos/orchestrate/jobs/[job_id]");
@@ -27,6 +28,7 @@ const routes = new Map([
   ["POST /api/founderos/repo/file", repoFileHandler],
   ["POST /api/founderos/repo/tree", repoTreeHandler],
   ["POST /api/founderos/commit/execute", commitExecuteHandler],
+  ["POST /api/founderos/commit/auto-execute", commitAutoExecuteHandler],
   ["POST /api/founderos/orchestrate/submit", orchestrateSubmitHandler],
   ["POST /api/founderos/orchestrate/claim", orchestrateClaimHandler],
 ]);
