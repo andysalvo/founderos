@@ -72,10 +72,6 @@ const activeSurface = files
   .map((file) => file.path)
   .sort();
 const repo = job.repo || (job.scope_json && job.scope_json.repo) || null;
-const activationDocNeedsWorkerUpdate =
-  !activationText.includes("FOUNDEROS_WORKER_KEY") ||
-  !activationText.includes("claim") ||
-  !activationText.includes("heartbeat");
 const desiredActivationDoc = [
   "# OpenClaw APS Activation",
   "",
@@ -197,8 +193,18 @@ const desiredActivationDoc = [
   "That is the current safe path from chat intent to bounded self-improvement.",
 ].join("\n");
 
-const improvementProposal = activationDocNeedsWorkerUpdate
-  ? {
+function hasLiveWorkerAuthMarkers(text) {
+  return (
+    typeof text === "string" &&
+    text.includes("FOUNDEROS_WORKER_KEY") &&
+    text.includes("claim") &&
+    text.includes("heartbeat")
+  );
+}
+
+function buildImprovementProposal({ repo, activationText, desiredActivationDoc }) {
+  if (!hasLiveWorkerAuthMarkers(activationText)) {
+    return {
       kind: "docs_alignment",
       title: "Update OpenClaw activation docs for the live async worker loop",
       priority: "high",
@@ -240,65 +246,62 @@ const improvementProposal = activationDocNeedsWorkerUpdate
           },
         ],
       },
-    }
-  : {
+    };
+  }
+
+  return {
       kind: "safe_improvement_proposal",
-      title: "Upgrade the worker from inspect-and-report to inspect-and-propose",
+      title: "Tighten worker recommendation freshness and add regression coverage",
       priority: "high",
       rationale:
-        "The system can inspect and report on itself, but it still lacks autonomous write-set generation for PR-based self-improvement.",
+        "The worker should stop repeating already-landed docs recommendations and instead return the next real bounded improvement.",
       risk_level: "low",
-      target_area: "services/openclaw, result shaping, and operator-facing docs",
+      target_area: "services/openclaw worker recommendation logic and regression coverage",
       target_files: [
         "services/openclaw/worker-loop.sh",
-        "services/openclaw/aps-client.sh",
-        "docs/FOUNDEROS_LIVE_STATE.md",
-        "README.md",
+        "tests/founderos-v1-contract.test.mjs",
       ],
       proposed_changes: [
-        "Generate a concrete safe improvement proposal from worker inspection output.",
-        "Return rationale, target files, acceptance criteria, and a candidate write-set scaffold in the job result.",
-        "Keep the live-state and README docs aligned with the improved worker behavior.",
+        "Detect when the live worker-auth docs markers are already present.",
+        "Suppress the stale docs-alignment recommendation in that state.",
+        "Add regression coverage for recommendation freshness in the active test suite.",
       ],
       acceptance_criteria: [
-        "Completed jobs include a bounded improvement proposal with explicit target files.",
-        "Proposal output remains within the existing PR-only guarded execution model.",
-        "Documentation reflects the richer autonomous worker behavior without overstating capabilities.",
+        "When the activation doc already contains live worker-auth markers, the worker does not recommend the docs-alignment fix again.",
+        "The returned bounded proposal points at worker-loop freshness logic and regression coverage.",
+        "The change stays within the current APS boundary and avoids protected paths.",
       ],
       expected_outcome:
-        "Return a concrete safe improvement proposal that can later be translated into a PR-ready exact write set.",
+        "Founderos recommends the next real low-risk self-improvement instead of repeating stale docs work.",
       candidate_write_set: {
         mode: "proposal_only",
         repo,
-        branch_name: "codex/safe-improvement-proposal",
+        branch_name: "codex/worker-recommendation-freshness",
         base_branch: "main",
-        title: "Improve autonomous proposal generation for Founderos worker",
+        title: "Improve worker recommendation freshness for Founderos",
         rationale:
-          "The worker can inspect and describe the system, but it should next emit one bounded improvement proposal with enough structure to translate into a PR-ready write set.",
+          "Once the worker-auth docs fix has landed, the worker should recommend the next bounded improvement instead of repeating stale docs work.",
         files: [
           {
             path: "services/openclaw/worker-loop.sh",
             action: "update",
-            intent: "Generate a concrete safe improvement proposal from inspection results.",
+            intent: "Make recommendation selection freshness-aware when docs markers are already present.",
           },
           {
-            path: "services/openclaw/aps-client.sh",
+            path: "tests/founderos-v1-contract.test.mjs",
             action: "update",
-            intent: "Support any additional worker-side orchestration calls needed by proposal generation.",
-          },
-          {
-            path: "docs/FOUNDEROS_LIVE_STATE.md",
-            action: "update",
-            intent: "Keep the live-state document aligned with the richer autonomous behavior.",
-          },
-          {
-            path: "README.md",
-            action: "update",
-            intent: "Keep top-level system documentation aligned with the new worker capability.",
+            intent: "Add regression coverage for recommendation freshness.",
           },
         ],
       },
     };
+}
+
+const improvementProposal = buildImprovementProposal({
+  repo,
+  activationText,
+  desiredActivationDoc,
+});
 const selfState = {
   identity: {
     name: "Founderos",

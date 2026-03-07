@@ -43,6 +43,23 @@ async function invoke(handler, req) {
   };
 }
 
+function extractWorkerFreshnessHelpers(source) {
+  const markerStart = source.indexOf("function hasLiveWorkerAuthMarkers");
+  const proposalStart = source.indexOf("function buildImprovementProposal");
+  const proposalEnd = source.indexOf("const improvementProposal = buildImprovementProposal");
+
+  assert.notEqual(markerStart, -1);
+  assert.notEqual(proposalStart, -1);
+  assert.notEqual(proposalEnd, -1);
+
+  const helperSource = source.slice(markerStart, proposalEnd);
+  const factory = new Function(
+    `${helperSource}\nreturn { hasLiveWorkerAuthMarkers, buildImprovementProposal };`
+  );
+
+  return factory();
+}
+
 test("OpenAPI surface exposes only the public APS contract", async () => {
   const openapi = await readFile(new URL("../docs/openapi.founderos.yaml", import.meta.url), "utf8");
 
@@ -379,4 +396,48 @@ test("commit.execute fails closed when witness storage is not configured", async
 
   assert.equal(response.statusCode, 500);
   assert.equal(response.json.error, "witness_not_configured");
+});
+
+test("worker recommendation freshness avoids repeating already-landed docs fixes", async () => {
+  const workerLoop = await readFile(
+    new URL("../services/openclaw/worker-loop.sh", import.meta.url),
+    "utf8"
+  );
+
+  const { hasLiveWorkerAuthMarkers, buildImprovementProposal } =
+    extractWorkerFreshnessHelpers(workerLoop);
+
+  const activationText = [
+    "# OpenClaw APS Activation",
+    "- OpenClaw uses `FOUNDEROS_WORKER_KEY` for worker-only orchestration claim, heartbeat, complete, and fail calls.",
+    "Worker claim check:",
+    "bash services/openclaw/aps-client.sh claim",
+    "Async job verification includes heartbeat updates.",
+  ].join("\n");
+
+  assert.equal(hasLiveWorkerAuthMarkers(activationText), true);
+
+  const proposal = buildImprovementProposal({
+    repo: "owner/repo",
+    activationText,
+    desiredActivationDoc: "unused in freshness path",
+  });
+
+  assert.equal(
+    proposal.title,
+    "Tighten worker recommendation freshness and add regression coverage"
+  );
+  assert.deepEqual(proposal.target_files, [
+    "services/openclaw/worker-loop.sh",
+    "tests/founderos-v1-contract.test.mjs",
+  ]);
+  assert.equal(proposal.candidate_write_set.files.length, 2);
+  assert.equal(
+    proposal.candidate_write_set.files[0].path,
+    "services/openclaw/worker-loop.sh"
+  );
+  assert.equal(
+    proposal.candidate_write_set.files[1].path,
+    "tests/founderos-v1-contract.test.mjs"
+  );
 });
