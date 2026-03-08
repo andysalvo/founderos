@@ -34,10 +34,15 @@ If APS, OpenClaw, and operator tools share one VM, they still need explicit sepa
 - Restart worker and APS services automatically on failure.
 - Persist logs outside the repo worktree.
 - Keep the repo clone disposable; keep state in Supabase and explicit operator-owned config/log locations.
+- Keep a copy-paste worker doctor command available so the operator can validate claim capability quickly after restart.
 
 Example worker service scaffold:
 
 - [`ops/openclaw/systemd/founderos-worker.service.example`](/Users/andysalvo_1/Documents/GitHub/founderos/ops/openclaw/systemd/founderos-worker.service.example)
+
+Worker doctor script:
+
+- [`services/openclaw/check-worker.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/check-worker.sh)
 
 ## Network exposure guidance
 
@@ -66,3 +71,4 @@ Example worker service scaffold:
 - Keep APS local-only unless it is intentionally the public control plane.
 - Verify worker heartbeat payloads include runtime commit attribution.
 - Keep recovery docs and systemd units under version control, but keep live secrets out of the repo.
+- After restart, verify the worker can still reach APS and claim work before treating it as healthy.
