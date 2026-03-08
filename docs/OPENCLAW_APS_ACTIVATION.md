@@ -55,6 +55,7 @@ chmod 600 /root/.config/founderos/aps.env
 This repo includes helpers at:
 
 - [`services/openclaw/aps-client.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/aps-client.sh)
+- [`services/openclaw/check-worker.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/check-worker.sh)
 - [`services/openclaw/extract-candidate-write-set.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/extract-candidate-write-set.sh)
 - [`services/openclaw/freeze-candidate.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/freeze-candidate.sh)
 - [`services/openclaw/decompose-project.sh`](/Users/andysalvo_1/Documents/GitHub/founderos/services/openclaw/decompose-project.sh)
@@ -85,16 +86,23 @@ The helper scripts support:
 
 This keeps APS as the authority boundary while making it much faster to promote low-risk worker output and break broad work into reviewable execution lanes.
 
-## Worker loop startup
+## Primary run model: systemd
 
-From the droplet clone of this repo:
+Use `systemd` as the primary way to run the worker.
+Do not treat `nohup` as the normal persistence model.
+
+Service scaffold in the repo:
+
+- [`ops/openclaw/systemd/founderos-worker.service.example`](/Users/andysalvo_1/Documents/GitHub/founderos/ops/openclaw/systemd/founderos-worker.service.example)
+
+Install flow on the droplet:
 
 ```bash
 cd /root/.openclaw/workspace/founderos
-set -a
-source /root/.config/founderos/aps.env
-set +a
-nohup bash services/openclaw/worker-loop.sh >/root/founderos-worker.log 2>&1 &
+install -m 644 ops/openclaw/systemd/founderos-worker.service.example /etc/systemd/system/founderos-worker.service
+systemctl daemon-reload
+systemctl enable --now founderos-worker.service
+systemctl status --no-pager founderos-worker.service
 ```
 
 ## Verification
@@ -109,6 +117,12 @@ Worker claim check:
 
 ```bash
 bash services/openclaw/aps-client.sh claim
+```
+
+Worker doctor check:
+
+```bash
+bash services/openclaw/check-worker.sh /root/.config/founderos/aps.env
 ```
 
 Async job verification:
@@ -135,6 +149,32 @@ bash services/openclaw/submit-track.sh /tmp/project-plan.json track-1
 ```
 
 This flow is intentionally one-track-at-a-time. It creates reviewable bounded lanes without pretending a true swarm scheduler already exists.
+
+## Recovery
+
+Fast restart path on the VM:
+
+```bash
+cd /root/.openclaw/workspace/founderos
+systemctl restart founderos-worker.service
+systemctl status --no-pager founderos-worker.service
+journalctl -u founderos-worker.service -n 50 --no-pager
+bash services/openclaw/check-worker.sh /root/.config/founderos/aps.env
+```
+
+If the service is not installed yet, do the install flow first and then run the worker doctor check.
+
+Emergency fallback only:
+
+```bash
+cd /root/.openclaw/workspace/founderos
+set -a
+source /root/.config/founderos/aps.env
+set +a
+nohup bash services/openclaw/worker-loop.sh >/root/founderos-worker.log 2>&1 &
+```
+
+That fallback is for temporary recovery only. Move back to `systemd` after the immediate incident is resolved.
 
 ## How execution stays safe
 
