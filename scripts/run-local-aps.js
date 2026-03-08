@@ -19,6 +19,7 @@ const orchestrateJobHeartbeatHandler = require("../api/founderos/orchestrate/job
 const orchestrateJobCompleteHandler = require("../api/founderos/orchestrate/jobs/[job_id]/complete");
 const orchestrateJobFailHandler = require("../api/founderos/orchestrate/jobs/[job_id]/fail");
 const tradingCandidatesHandler = require("../api/founderos/trading/candidates");
+const tradingShadowScanHandler = require("../api/founderos/trading/candidates/shadow-scan");
 const tradingCandidateHandler = require("../api/founderos/trading/candidates/[candidate_id]");
 const tradingCandidateDecisionHandler = require("../api/founderos/trading/candidates/[candidate_id]/decision");
 const tradingJournalHandler = require("../api/founderos/trading/journal");
@@ -42,6 +43,7 @@ const routes = new Map([
   ["POST /api/founderos/orchestrate/submit", orchestrateSubmitHandler],
   ["POST /api/founderos/orchestrate/claim", orchestrateClaimHandler],
   ["GET /api/founderos/trading/candidates", tradingCandidatesHandler],
+  ["POST /api/founderos/trading/candidates/shadow-scan", tradingShadowScanHandler],
   ["GET /api/founderos/trading/journal", tradingJournalHandler],
   ["GET /api/founderos/trading/connectors/health", tradingConnectorsHealthHandler],
 ]);

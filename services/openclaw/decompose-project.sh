@@ -52,7 +52,7 @@ function inferTradingProfile(text) {
     execution_mode: text.includes("live") ? "paper" : "paper",
     strategy_name: "btc_usd_breakout_v1",
     asset,
-    timeframe: text.includes("1h") ? "1h" : text.includes("5m") ? "5m" : "15m",
+    timeframe: text.includes("1h") ? "1h" : text.includes("5m") ? "5m" : "5m",
     anchor_paths: [
       "projects/paper-trading-loop/README.md",
       "projects/paper-trading-loop/alpaca-paper-mvp.md",

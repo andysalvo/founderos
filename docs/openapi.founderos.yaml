@@ -547,26 +547,51 @@ components:
           $ref: "#/components/schemas/PlanArtifact"
       required: [ok, artifact]
       additionalProperties: false
+    TradingCandle:
+      type: object
+      properties:
+        t:
+          type: string
+          format: date-time
+        o:
+          type: number
+        h:
+          type: number
+        l:
+          type: number
+        c:
+          type: number
+        v:
+          type: number
+      required: [t, o, h, l, c, v]
+      additionalProperties: false
     TradingCandidateSummary:
       type: object
       properties:
+        candidate_id:
+          type: string
+          format: uuid
         id:
           type: string
           format: uuid
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        asset:
-          type: string
-        timeframe:
+        status:
           type: string
         venue:
-          type: string
+          type:
+            - string
+            - "null"
         execution_mode:
-          type: string
+          type:
+            - string
+            - "null"
+        asset:
+          type:
+            - string
+            - "null"
+        timeframe:
+          type:
+            - string
+            - "null"
         strategy_name:
           type:
             - string
@@ -575,18 +600,176 @@ components:
           type:
             - string
             - "null"
-        status:
-          type: string
+        signal_version:
+          type:
+            - string
+            - "null"
+        thesis:
+          type:
+            - string
+            - "null"
+        entry_reason:
+          type:
+            - string
+            - "null"
+        invalidation:
+          type:
+            - string
+            - "null"
+        direction:
+          type:
+            - string
+            - "null"
+        entry_price:
+          type:
+            - number
+            - "null"
+        position_size:
+          type:
+            - number
+            - "null"
         max_risk:
           type:
             - number
             - "null"
-        payload_json:
+        stop_rule:
+          type:
+            - string
+            - "null"
+        exit_rule:
+          type:
+            - string
+            - "null"
+        compact_strategy_metadata:
           type: object
-        decision_json:
+        decision:
+          type:
+            - string
+            - "null"
+        decided_by:
+          type:
+            - string
+            - "null"
+        created_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+      required:
+        - candidate_id
+        - id
+        - status
+        - venue
+        - execution_mode
+        - asset
+        - timeframe
+        - strategy_name
+        - strategy_version
+        - signal_version
+        - thesis
+        - entry_reason
+        - invalidation
+        - direction
+        - entry_price
+        - position_size
+        - max_risk
+        - stop_rule
+        - exit_rule
+        - compact_strategy_metadata
+        - decision
+        - decided_by
+        - created_at
+        - updated_at
+      additionalProperties: false
+    TradingShadowScanRequest:
+      type: object
+      properties:
+        requested_by:
+          type: string
+        provider:
+          type: string
+        venue:
+          type: string
+        source:
+          type: string
+        execution_mode:
+          type: string
+        strategy_name:
+          type: string
+        asset:
+          type: string
+        timeframe:
+          type: string
+        as_of:
+          type: string
+          format: date-time
+        source_job_id:
+          type: string
+          format: uuid
+        candles:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingCandle"
+      required: [candles]
+      additionalProperties: false
+    TradingShadowScanResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        scan_status:
+          type: string
+          enum: [candidate_created, no_trade]
+        strategy_name:
+          type: string
+        strategy_version:
+          type: string
+        signal_version:
+          type: string
+        summary:
+          type: string
+        market_snapshot_id:
+          type: string
+          format: uuid
+        signal_run_id:
+          type: string
+          format: uuid
+        compact_strategy_metadata:
           type: object
-      required: [id, created_at, updated_at, asset, timeframe, venue, execution_mode, strategy_name, strategy_version, status, max_risk, payload_json, decision_json]
-      additionalProperties: true
+        candidate:
+          oneOf:
+            - $ref: "#/components/schemas/TradingCandidateSummary"
+            - type: "null"
+        live_authority_state:
+          type: object
+          properties:
+            stage:
+              type: string
+            enabled:
+              type: boolean
+            basis:
+              type: string
+          required: [stage, enabled, basis]
+          additionalProperties: false
+      required:
+        - ok
+        - scan_status
+        - strategy_name
+        - strategy_version
+        - signal_version
+        - summary
+        - market_snapshot_id
+        - signal_run_id
+        - compact_strategy_metadata
+        - candidate
+        - live_authority_state
+      additionalProperties: false
     ApprovalDecisionRecord:
       type: object
       properties:
@@ -1667,6 +1850,49 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Trading read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/trading/candidates/shadow-scan:
+    post:
+      operationId: tradingShadowScan
+      summary: Run one paper-only deterministic shadow scan
+      security:
+        - FounderosApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingShadowScanRequest"
+      responses:
+        "200":
+          description: Shadow scan evaluated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingShadowScanResponse"
+        "400":
+          description: Invalid scan request or non-paper configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing trading storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Trading write failed
           content:
             application/json:
               schema:

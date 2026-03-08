@@ -13,7 +13,10 @@ Use a tiny **single-asset momentum or breakout strategy** on one highly liquid s
 
 Example starting universe:
 
-- BTC/USD or BTC/USDT only
+- BTC/USD only
+- 5m only
+- long-only only
+- fixed paper notional only
 
 ## Why this is the right first strategy
 
@@ -30,6 +33,19 @@ Example starting universe:
 - one invalidation rule
 - one stop rule
 - one exit rule
+- one fixed position-sizing rule
+
+## Current bounded rule
+
+The current first implementation target is:
+
+- `strategy_name`: `btc_usd_breakout_v1`
+- `asset`: `BTC/USD`
+- `timeframe`: `5m`
+- `direction`: `long` only
+- `entry`: last 5m close breaks above the prior 20-bar high
+- `risk cap`: fixed paper risk with fixed paper notional
+- `exit`: deterministic stop plus simple profit or time stop
 
 ## What the first version should avoid
 

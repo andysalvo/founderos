@@ -103,6 +103,7 @@ These routes exist in code and are covered by the contract test in [tests/founde
 - `POST /api/founderos/orchestrate/submit`
 - `GET /api/founderos/orchestrate/jobs/{job_id}`
 - `GET /api/founderos/trading/candidates`
+- `POST /api/founderos/trading/candidates/shadow-scan`
 - `GET /api/founderos/trading/candidates/{candidate_id}`
 - `POST /api/founderos/trading/candidates/{candidate_id}/decision`
 - `GET /api/founderos/trading/journal`
@@ -120,6 +121,7 @@ Primary implementation paths:
 - [api/founderos/orchestrate/jobs/[job_id].js](../api/founderos/orchestrate/jobs/[job_id].js)
 - [api/_lib/trading.js](../api/_lib/trading.js)
 - [api/founderos/trading/candidates.js](../api/founderos/trading/candidates.js)
+- [api/founderos/trading/candidates/shadow-scan.js](../api/founderos/trading/candidates/shadow-scan.js)
 - [api/founderos/trading/candidates/[candidate_id].js](../api/founderos/trading/candidates/[candidate_id].js)
 - [api/founderos/trading/candidates/[candidate_id]/decision.js](../api/founderos/trading/candidates/[candidate_id]/decision.js)
 - [api/founderos/trading/journal.js](../api/founderos/trading/journal.js)

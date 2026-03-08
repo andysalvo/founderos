@@ -95,6 +95,13 @@ const ENDPOINTS = [
     purpose: "List governed trading candidates and their latest approval state.",
   },
   {
+    operationId: "tradingShadowScan",
+    method: "POST",
+    path: "/api/founderos/trading/candidates/shadow-scan",
+    auth: "apiKey",
+    purpose: "Run one paper-only deterministic shadow scan and optionally create a trade candidate.",
+  },
+  {
     operationId: "tradingCandidate",
     method: "GET",
     path: "/api/founderos/trading/candidates/{candidate_id}",

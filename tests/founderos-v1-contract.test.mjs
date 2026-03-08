@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { buildPlanArtifact } = require("../api/_lib/founderos-v1.js");
 const { normalizeSubmitBody } = require("../api/_lib/orchestration.js");
+const { evaluateBtcUsdBreakoutV1, SHADOW_SCAN_DEFAULTS } = require("../api/_lib/trading.js");
 
 const healthHandler = require("../api/founderos/health.js");
 const capabilitiesHandler = require("../api/founderos/capabilities.js");
@@ -13,6 +14,7 @@ const capabilitiesCheckHandler = require("../api/founderos/capabilities/check.js
 const orchestrateSubmitHandler = require("../api/founderos/orchestrate/submit.js");
 const orchestrateJobStatusHandler = require("../api/founderos/orchestrate/jobs/[job_id].js");
 const orchestrateClaimHandler = require("../api/founderos/orchestrate/claim.js");
+const tradingShadowScanHandler = require("../api/founderos/trading/candidates/shadow-scan.js");
 const tradingConnectorsHealthHandler = require("../api/founderos/trading/connectors/health.js");
 
 const EXPECTED_PUBLIC_ENDPOINTS = [
@@ -28,6 +30,7 @@ const EXPECTED_PUBLIC_ENDPOINTS = [
   "/api/founderos/orchestrate/submit",
   "/api/founderos/orchestrate/jobs/{job_id}",
   "/api/founderos/trading/candidates",
+  "/api/founderos/trading/candidates/shadow-scan",
   "/api/founderos/trading/candidates/{candidate_id}",
   "/api/founderos/trading/candidates/{candidate_id}/decision",
   "/api/founderos/trading/journal",
@@ -58,6 +61,40 @@ async function invoke(handler, req) {
     headers: res.headers,
     json: res.body ? JSON.parse(res.body) : undefined,
   };
+}
+
+function buildBreakoutCandles({ breakout = false } = {}) {
+  const candles = [];
+  let close = 100;
+
+  for (let index = 0; index < 20; index += 1) {
+    const open = close;
+    const nextClose = 100 + (index % 3) * 0.15;
+    const high = Math.max(open, nextClose) + 0.35;
+    const low = Math.min(open, nextClose) - 0.35;
+    candles.push({
+      t: new Date(Date.UTC(2026, 2, 7, 0, index * 5)).toISOString(),
+      o: Number(open.toFixed(2)),
+      h: Number(high.toFixed(2)),
+      l: Number(low.toFixed(2)),
+      c: Number(nextClose.toFixed(2)),
+      v: 10 + index,
+    });
+    close = nextClose;
+  }
+
+  const priorHigh = Math.max(...candles.map((bar) => bar.h));
+  const lastClose = breakout ? priorHigh + 1.25 : priorHigh - 0.4;
+  candles.push({
+    t: new Date(Date.UTC(2026, 2, 7, 1, 40)).toISOString(),
+    o: Number(close.toFixed(2)),
+    h: Number((lastClose + 0.25).toFixed(2)),
+    l: Number((Math.min(close, lastClose) - 0.3).toFixed(2)),
+    c: Number(lastClose.toFixed(2)),
+    v: 50,
+  });
+
+  return candles;
 }
 
 function extractWorkerHelpers(source) {
@@ -198,7 +235,7 @@ test("worker returns a trading-specific proposal for paper-trading-loop jobs", a
     executionMode: "paper",
     strategyName: "btc_usd_breakout_v1",
     asset: "BTC/USD",
-    timeframe: "15m",
+    timeframe: "5m",
     anchorDocs: [{ path: "projects/paper-trading-loop/README.md", content: "# Paper Trading Loop" }],
   });
 
@@ -219,7 +256,7 @@ test("worker returns a trading-specific proposal for paper-trading-loop jobs", a
     execution_mode: "paper",
     strategy_name: "btc_usd_breakout_v1",
     asset: "BTC/USD",
-    timeframe: "15m",
+    timeframe: "5m",
   });
 });
 
@@ -238,7 +275,7 @@ test("worker builds trading structured output with project anchors loaded", asyn
     executionMode: "paper",
     strategyName: "btc_usd_breakout_v1",
     asset: "BTC/USD",
-    timeframe: "15m",
+    timeframe: "5m",
     anchorDocs: [{ path: "projects/paper-trading-loop/README.md", content: "# Paper Trading Loop" }],
   });
 
@@ -276,7 +313,7 @@ test("buildPlanArtifact preserves trading scope and intended tools", () => {
       execution_mode: "paper",
       strategy_name: "btc_usd_breakout_v1",
       asset: "BTC/USD",
-      timeframe: "15m",
+      timeframe: "5m",
     },
     []
   );
@@ -288,7 +325,7 @@ test("buildPlanArtifact preserves trading scope and intended tools", () => {
   assert.equal(artifact.scope.execution_mode, "paper");
   assert.equal(artifact.scope.strategy_name, "btc_usd_breakout_v1");
   assert.equal(artifact.scope.asset, "BTC/USD");
-  assert.equal(artifact.scope.timeframe, "15m");
+  assert.equal(artifact.scope.timeframe, "5m");
   assert.ok(artifact.intended_tools.some((item) => item.name === "trading-research"));
 });
 
@@ -316,9 +353,30 @@ test("normalizeSubmitBody backfills trading scope when GPT sends a thin paper-tr
   assert.equal(normalized.scope.execution_mode, "paper");
   assert.equal(normalized.scope.strategy_name, "btc_usd_breakout_v1");
   assert.equal(normalized.scope.asset, "BTC/USD");
-  assert.equal(normalized.scope.timeframe, "15m");
+  assert.equal(normalized.scope.timeframe, "5m");
   assert.ok(normalized.scope.anchor_paths.length > 0);
   assert.ok(normalized.scope.allowed_paths.length > 0);
+});
+
+test("deterministic breakout strategy returns no_trade when the last close does not clear the prior high", () => {
+  const result = evaluateBtcUsdBreakoutV1(buildBreakoutCandles({ breakout: false }));
+
+  assert.equal(result.scan_status, "no_trade");
+  assert.equal(result.decision, "no_trade");
+  assert.equal(result.direction, "flat");
+  assert.equal(result.signal_version, SHADOW_SCAN_DEFAULTS.signal_version);
+});
+
+test("deterministic breakout strategy returns a compact candidate when the breakout confirms", () => {
+  const result = evaluateBtcUsdBreakoutV1(buildBreakoutCandles({ breakout: true }));
+
+  assert.equal(result.scan_status, "candidate_created");
+  assert.equal(result.decision, "candidate");
+  assert.equal(result.direction, "long");
+  assert.equal(typeof result.entry_price, "number");
+  assert.equal(typeof result.position_size, "number");
+  assert.equal(result.signal_version, SHADOW_SCAN_DEFAULTS.signal_version);
+  assert.equal(result.compact_strategy_metadata.breakout_lookback_bars, 20);
 });
 
 test("worker check script verifies trading-specific smoke inputs and outputs", async () => {
@@ -604,7 +662,7 @@ test("trading candidates route lists candidates from the APS trading helper", as
   const candidatesHandler = loadFreshCommonJs("../api/founderos/trading/candidates.js", {
     "../api/_lib/trading.js": {
       async listTradeCandidates() {
-        return [{ id: "cand-1", asset: "BTC/USD", status: "proposed" }];
+        return [{ candidate_id: "cand-1", asset: "BTC/USD", timeframe: "5m", status: "proposed" }];
       },
     },
   });
@@ -617,7 +675,74 @@ test("trading candidates route lists candidates from the APS trading helper", as
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.ok, true);
-  assert.deepEqual(response.json.candidates, [{ id: "cand-1", asset: "BTC/USD", status: "proposed" }]);
+  assert.deepEqual(response.json.candidates, [
+    { candidate_id: "cand-1", asset: "BTC/USD", timeframe: "5m", status: "proposed" },
+  ]);
+});
+
+test("trading shadow scan route returns a persisted candidate when the deterministic scan fires", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+
+  const shadowScanRoute = loadFreshCommonJs("../api/founderos/trading/candidates/shadow-scan.js", {
+    "../api/_lib/trading.js": {
+      async createShadowScanCandidate() {
+        return {
+          ok: true,
+          scan_status: "candidate_created",
+          strategy_name: "btc_usd_breakout_v1",
+          strategy_version: "v1",
+          signal_version: "btc_usd_breakout_v1.signal.v1",
+          summary: "Candidate created.",
+          market_snapshot_id: "snapshot-1",
+          signal_run_id: "signal-1",
+          compact_strategy_metadata: { breakout_lookback_bars: 20 },
+          candidate: {
+            candidate_id: "cand-1",
+            status: "proposed",
+            execution_mode: "paper",
+            asset: "BTC/USD",
+            timeframe: "5m",
+          },
+          live_authority_state: { stage: "paper_only", enabled: false, basis: "env_config" },
+        };
+      },
+    },
+  });
+
+  const response = await invoke(shadowScanRoute, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: { candles: buildBreakoutCandles({ breakout: true }) },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.ok, true);
+  assert.equal(response.json.scan_status, "candidate_created");
+  assert.equal(response.json.candidate.candidate_id, "cand-1");
+  assert.equal(response.json.candidate.timeframe, "5m");
+});
+
+test("trading shadow scan route rejects non-paper execution", async () => {
+  process.env.FOUNDEROS_WRITE_KEY = "test-key";
+
+  const shadowScanRoute = loadFreshCommonJs("../api/founderos/trading/candidates/shadow-scan.js", {
+    "../api/_lib/trading.js": {
+      async createShadowScanCandidate() {
+        const error = new Error("shadow_scan_paper_only");
+        error.code = "shadow_scan_paper_only";
+        throw error;
+      },
+    },
+  });
+
+  const response = await invoke(shadowScanRoute, {
+    method: "POST",
+    headers: { "x-founderos-key": "test-key" },
+    body: { execution_mode: "live", candles: buildBreakoutCandles({ breakout: true }) },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "shadow_scan_paper_only");
 });
 
 test("trading candidate route reads one candidate record", async () => {

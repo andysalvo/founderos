@@ -576,7 +576,7 @@ function buildTradingProposal({
       execution_mode: executionMode || "paper",
       strategy_name: strategyName || "btc_usd_breakout_v1",
       asset: asset || "BTC/USD",
-      timeframe: timeframe || "15m",
+      timeframe: timeframe || "5m",
     },
     proposed_changes: chosen.proposed_changes,
     acceptance_criteria: chosen.acceptance_criteria,
@@ -703,7 +703,7 @@ const tradingContext =
         execution_mode: executionMode || "paper",
         strategy_name: strategyName || "btc_usd_breakout_v1",
         asset: asset || "BTC/USD",
-        timeframe: timeframe || "15m",
+        timeframe: timeframe || "5m",
         aps_authority_model: "aps_owned_connectors_risk_and_execution",
         live_authority_stage: "paper_only_until_amended",
       }

@@ -43,7 +43,7 @@ Project-scoped trading submit shape:
 - `execution_mode`: `paper` unless later governance explicitly opens another stage
 - `strategy_name`: `btc_usd_breakout_v1`
 - `asset`: default `BTC/USD`
-- `timeframe`: default `15m`
+- `timeframe`: default `5m`
 
 Desired user experience:
 

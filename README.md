@@ -60,6 +60,7 @@ Public principles and authority-model docs live in [docs/principles/](/Users/and
 - `POST /api/founderos/orchestrate/submit`
 - `GET /api/founderos/orchestrate/jobs/{job_id}`
 - `GET /api/founderos/trading/candidates`
+- `POST /api/founderos/trading/candidates/shadow-scan`
 - `GET /api/founderos/trading/candidates/{candidate_id}`
 - `POST /api/founderos/trading/candidates/{candidate_id}/decision`
 - `GET /api/founderos/trading/journal`

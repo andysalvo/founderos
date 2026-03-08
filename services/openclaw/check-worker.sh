@@ -189,7 +189,7 @@ const payload = {
     execution_mode: "paper",
     strategy_name: "btc_usd_breakout_v1",
     asset: "BTC/USD",
-    timeframe: "15m",
+    timeframe: "5m",
   },
 };
 fs.writeFileSync(process.argv[1], JSON.stringify(payload, null, 2));

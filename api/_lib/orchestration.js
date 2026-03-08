@@ -206,7 +206,7 @@ function inferTradingTimeframe(userRequest, scope) {
   if (text.includes("5m")) {
     return "5m";
   }
-  return "15m";
+  return "5m";
 }
 
 function normalizeSubmitScope(userRequest, rawScope) {
