@@ -32,6 +32,19 @@ That makes it a good fit for:
 - post-trade review
 - human-authorized live staging later
 
+## Money-path framing
+
+This project is not trying to reinvent a broad trading platform.
+
+It exists to prove one monetizable operator loop that fits Founderos well:
+
+1. the system does most of the repetitive work
+2. the system produces staged, reviewable outputs
+3. the founder authorizes irreversible real-money actions later
+
+That is the narrow commercial thesis.
+Founderos is the control plane for this loop, not the end-user trading product by default.
+
 ## First milestone
 
 Prove a disciplined paper-trading loop works end to end:
@@ -50,6 +63,8 @@ Prove a disciplined paper-trading loop works end to end:
 - `risk-rules.md`
 - `journal-schema.md`
 - `first-strategy.md`
+- `monetization-path.md`
+- `what-not-to-build-yet.md`
 
 ## Success condition for phase 1
 

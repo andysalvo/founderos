@@ -75,8 +75,30 @@ The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Docum
 - Raw model text is not treated as executable authority. Shell, Git, SQL, and mutating GitHub inputs must arrive as structured payloads that pass deterministic validation first.
 - Witness logging happens before GitHub writes begin. If witness recording is unavailable, execution fails closed.
 - GitHub App and Supabase credentials remain server-side.
-- OpenClaw on the VM can now autonomously claim async jobs, inspect the repo, and return structured results through APS with worker runtime commit attribution in heartbeat and completion payloads.
-- Worker jobs now return structured inspection results plus a dedicated bounded proposal block that can be reviewed and promoted into an exact write set.
+- OpenClaw on the VM can autonomously claim async jobs, inspect the repo, and return structured results through APS with worker runtime commit attribution in heartbeat and completion payloads.
+- Worker jobs return structured inspection results plus a bounded proposal block that can be reviewed and promoted into an exact write set.
+
+## Monetization framing
+
+Founderos should be treated as a **control plane for bounded money loops**, not as a broad consumer product by default.
+
+That means the repo is optimized for:
+
+- orchestration
+- approvals
+- durable logs
+- worker execution
+- reviewable bounded actions
+
+The current monetization path is intentionally narrow:
+
+- first prove a disciplined **paper-first crypto spot trading operator**
+- then, only if the paper loop is legible and stable, progress to **human-authorized live trade staging**
+- do not widen into a generic trading bot, generic AI SaaS, or random marketplace experiments without a separate explicit project decision
+
+The active project for this path lives under:
+
+- `projects/paper-trading-loop/`
 
 ## Deployment and setup
 
