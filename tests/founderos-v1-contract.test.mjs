@@ -218,6 +218,34 @@ test("worker falls back to docs alignment when activation markers are absent", a
   );
 });
 
+test("worker check script verifies worker-runtime drift and proposal-shape fields", async () => {
+  const script = await readFile(
+    new URL("../services/openclaw/check-worker.sh", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(script, /LOCAL_COMMIT_SHA=/);
+  assert.match(script, /submit \"\$\{SMOKE_OBJECTIVE\}\" \"\$\{SMOKE_REPO\}\" \"\$\{SMOKE_BRANCH\}\" \"worker-check\"/);
+  assert.match(script, /job-status \"\$\{JOB_ID\}\"/);
+  assert.match(script, /worker_commit_sha/);
+  assert.match(script, /structured_output_present/);
+  assert.match(script, /candidate_write_set_present/);
+  assert.match(script, /worker contract verified/);
+});
+
+test("worker reconcile script can fetch, restart, and invoke the contract check", async () => {
+  const script = await readFile(
+    new URL("../services/openclaw/reconcile-worker.sh", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(script, /--fetch/);
+  assert.match(script, /git fetch --all --prune/);
+  assert.match(script, /--restart/);
+  assert.match(script, /systemctl restart/);
+  assert.match(script, /services\/openclaw\/check-worker\.sh/);
+});
+
 test("OpenAPI surface exposes only the public APS contract", async () => {
   const openapi = await readFile(new URL("../docs/openapi.founderos.yaml", import.meta.url), "utf8");
 
