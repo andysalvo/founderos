@@ -2,6 +2,8 @@
 Description=Founderos OpenClaw Worker
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=20
 
 [Service]
 Type=simple
@@ -9,8 +11,10 @@ User=root
 WorkingDirectory=/root/.openclaw/workspace/founderos
 EnvironmentFile=/root/.config/founderos/aps.env
 ExecStart=/usr/bin/env bash /root/.openclaw/workspace/founderos/services/openclaw/worker-loop.sh
+ExecStartPost=/usr/bin/env bash /root/.openclaw/workspace/founderos/services/openclaw/check-worker.sh /root/.config/founderos/aps.env
 Restart=always
 RestartSec=5
+TimeoutStartSec=30
 StandardOutput=append:/var/log/founderos-worker.log
 StandardError=append:/var/log/founderos-worker.log
 
