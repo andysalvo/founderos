@@ -37,6 +37,7 @@ Typical contents might include:
 Active examples:
 
 - `projects/openclaw-outputs-ledger/` — curated mirror of important OpenClaw outputs keyed by `job_id` and backed by canonical Supabase orchestration records
+- `projects/paper-trading-loop/` — bounded paper-trading project with an explicit no-live-money starting boundary and a human-authorized live-order north star
 
 ## Communication rule
 
