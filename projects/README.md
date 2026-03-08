@@ -34,10 +34,20 @@ Typical contents might include:
 - links to related repo paths
 - decisions relevant to the project
 
-Active examples:
+## Active examples
 
 - `projects/openclaw-outputs-ledger/` — curated mirror of important OpenClaw outputs keyed by `job_id` and backed by canonical Supabase orchestration records
-- `projects/paper-trading-loop/` — bounded paper-trading project with an explicit no-live-money starting boundary and a human-authorized live-order north star
+- `projects/paper-trading-loop/` — the active monetization project: a bounded paper-first crypto spot operator with an explicit no-live-money starting boundary and a human-authorized live-order north star
+
+## Project portfolio discipline
+
+Founderos should not spawn many parallel monetization projects by default.
+
+The current rule is:
+
+- keep one primary money-path project active at a time unless a later repo decision explicitly broadens the portfolio
+- treat Founderos itself as the control plane, not as the end-user product by default
+- use projects to prove one bounded money loop end to end before adding new commercialization ideas
 
 ## Communication rule
 
