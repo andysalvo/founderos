@@ -59,6 +59,12 @@ Public principles and authority-model docs live in [docs/principles/](/Users/and
 - `POST /api/founderos/commit/merge-pr`
 - `POST /api/founderos/orchestrate/submit`
 - `GET /api/founderos/orchestrate/jobs/{job_id}`
+- `GET /api/founderos/trading/candidates`
+- `GET /api/founderos/trading/candidates/{candidate_id}`
+- `POST /api/founderos/trading/candidates/{candidate_id}/decision`
+- `GET /api/founderos/trading/journal`
+- `GET /api/founderos/trading/backtests/{run_id}`
+- `GET /api/founderos/trading/connectors/health`
 
 The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Documents/GitHub/founderos/docs/openapi.founderos.yaml).
 
@@ -71,12 +77,13 @@ The canonical schema is [`docs/openapi.founderos.yaml`](/Users/andysalvo_1/Docum
 - `commit/execute` is the only durable-write path. It is mechanical, hash-bound, and requires explicit authorization.
 - `commit/merge-pr` is a separate narrow authority path: allowlisted repo only, explicit authorization only, squash-only, protected-branch only, and blocked unless checks are green.
 - `orchestrate/submit` and `orchestrate/jobs/{job_id}` provide the public async lane for longer-running worker tasks.
+- APS-owned trading routes expose candidate review, journal reads, backtest reads, and connector readiness without moving broker authority onto the VM.
 - Policy-bearing artifacts are classified explicitly. Protected control-plane and provenance artifacts are blocked from governed durable writes, and review-required policy artifacts are surfaced as governance-bearing rather than ordinary content.
 - Raw model text is not treated as executable authority. Shell, Git, SQL, and mutating GitHub inputs must arrive as structured payloads that pass deterministic validation first.
 - Witness logging happens before GitHub writes begin. If witness recording is unavailable, execution fails closed.
 - GitHub App and Supabase credentials remain server-side.
 - OpenClaw on the VM can autonomously claim async jobs, inspect the repo, and return structured results through APS with worker runtime commit attribution in heartbeat and completion payloads.
-- Worker jobs return structured inspection results plus a bounded proposal block that can be reviewed and promoted into an exact write set.
+- Worker jobs now support project-aware trading lanes so `paper-trading-loop` tracks load their anchors before proposing research, backtest, shadow-scan, execution, or sync work.
 
 ## Monetization framing
 

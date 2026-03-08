@@ -15,7 +15,7 @@ The money path is:
 
 For the current active project, that money loop is:
 
-**paper-first crypto spot trading -> human-authorized live trade staging -> later, if earned, human-authorized live execution**
+**paper-first crypto spot trading -> human-authorized live trade staging -> later, if earned, human-authorized live execution -> only after further governance, bounded autonomous live execution**
 
 ## Why this path fits Founderos
 
@@ -58,6 +58,11 @@ Prove human-authorized live trade staging.
 
 Only after the first two phases are stable, consider human-authorized live execution.
 
+### Phase 4
+
+Only after the earlier phases are stable, governable, and well-evidenced, consider a bounded autonomous live lane.
+
 ## Rule
 
 Do not widen the money path until the current phase is legible, repeatable, and reviewable.
+Any future autonomous live widening should happen through explicit amendments and promotion gates rather than implementation convenience.

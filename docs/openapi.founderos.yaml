@@ -245,6 +245,24 @@ components:
               type: array
               items:
                 type: string
+            project_slug:
+              type: string
+            task_kind:
+              type: string
+            anchor_paths:
+              type: array
+              items:
+                type: string
+            provider:
+              type: string
+            execution_mode:
+              type: string
+            strategy_name:
+              type: string
+            asset:
+              type: string
+            timeframe:
+              type: string
           additionalProperties: false
         constraints:
           type: array
@@ -395,6 +413,24 @@ components:
               type: array
               items:
                 type: string
+            project_slug:
+              type: string
+            task_kind:
+              type: string
+            anchor_paths:
+              type: array
+              items:
+                type: string
+            provider:
+              type: string
+            execution_mode:
+              type: string
+            strategy_name:
+              type: string
+            asset:
+              type: string
+            timeframe:
+              type: string
           additionalProperties: false
         constraints:
           type: array
@@ -459,7 +495,26 @@ components:
               type: array
               items:
                 type: string
-          required: [repo, branch, allowed_paths, forbidden_paths]
+            project_slug:
+              type: string
+            task_kind:
+              type: string
+            anchor_paths:
+              type: array
+              items:
+                type: string
+            provider:
+              type: string
+            execution_mode:
+              type: string
+            strategy_name:
+              type: string
+            asset:
+              type: string
+            timeframe:
+              type: string
+          required:
+            [repo, branch, allowed_paths, forbidden_paths, project_slug, task_kind, anchor_paths, provider, execution_mode, strategy_name, asset, timeframe]
           additionalProperties: false
         warnings:
           type: array
@@ -491,6 +546,312 @@ components:
         artifact:
           $ref: "#/components/schemas/PlanArtifact"
       required: [ok, artifact]
+      additionalProperties: false
+    TradingCandidateSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        asset:
+          type: string
+        timeframe:
+          type: string
+        venue:
+          type: string
+        execution_mode:
+          type: string
+        strategy_name:
+          type:
+            - string
+            - "null"
+        strategy_version:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+        max_risk:
+          type:
+            - number
+            - "null"
+        payload_json:
+          type: object
+        decision_json:
+          type: object
+      required: [id, created_at, updated_at, asset, timeframe, venue, execution_mode, strategy_name, strategy_version, status, max_risk, payload_json, decision_json]
+      additionalProperties: true
+    ApprovalDecisionRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        candidate_id:
+          type: string
+          format: uuid
+        decision:
+          type: string
+        decided_by:
+          type: string
+        note:
+          type:
+            - string
+            - "null"
+        context_json:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+      required: [id, candidate_id, decision, decided_by, note, context_json, created_at]
+      additionalProperties: true
+    BrokerOrderRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        candidate_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        provider_order_id:
+          type:
+            - string
+            - "null"
+        client_order_id:
+          type:
+            - string
+            - "null"
+        asset:
+          type: string
+        order_type:
+          type: string
+        side:
+          type: string
+        time_in_force:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+        submitted_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        provider_payload_json:
+          type: object
+      required: [id, candidate_id, provider_order_id, client_order_id, asset, order_type, side, time_in_force, status, submitted_at, updated_at, provider_payload_json]
+      additionalProperties: true
+    TradingCandidatesResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingCandidateSummary"
+      required: [ok, candidates]
+      additionalProperties: false
+    TradingCandidateResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        candidate:
+          $ref: "#/components/schemas/TradingCandidateSummary"
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApprovalDecisionRecord"
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrokerOrderRecord"
+      required: [ok, candidate, decisions, orders]
+      additionalProperties: false
+    TradingDecisionRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        authorized_by:
+          type: string
+        note:
+          type: string
+        execution_mode:
+          type: string
+        context_json:
+          type: object
+      required: [decision, authorized_by]
+      additionalProperties: false
+    TradingDecisionResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        candidate:
+          $ref: "#/components/schemas/TradingCandidateSummary"
+        decision:
+          $ref: "#/components/schemas/ApprovalDecisionRecord"
+        live_authority_state:
+          type: object
+          properties:
+            stage:
+              type: string
+            enabled:
+              type: boolean
+            basis:
+              type: string
+          required: [stage, enabled, basis]
+          additionalProperties: false
+      required: [ok, candidate, decision, live_authority_state]
+      additionalProperties: false
+    TradingJournalEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        asset:
+          type: string
+        timeframe:
+          type: string
+        venue:
+          type: string
+        execution_mode:
+          type: string
+        strategy_name:
+          type: string
+        status:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, asset, timeframe, venue, execution_mode, strategy_name, status, updated_at]
+      additionalProperties: true
+    TradingJournalResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingJournalEntry"
+      required: [ok, entries]
+      additionalProperties: false
+    EvaluationRunRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        strategy_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        dataset_id:
+          type: string
+        mode:
+          type: string
+        trial_count:
+          type: integer
+        pbo:
+          type:
+            - number
+            - "null"
+        dsr:
+          type:
+            - number
+            - "null"
+        serial_correlation_adjusted_sharpe:
+          type:
+            - number
+            - "null"
+        result_summary:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        metrics_json:
+          type: object
+      required: [id, strategy_id, dataset_id, mode, trial_count, pbo, dsr, serial_correlation_adjusted_sharpe, result_summary, created_at, metrics_json]
+      additionalProperties: true
+    TradingBacktestResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        run:
+          $ref: "#/components/schemas/EvaluationRunRecord"
+      required: [ok, run]
+      additionalProperties: false
+    BrokerConnectorHealth:
+      type: object
+      properties:
+        connector_id:
+          type: string
+        provider:
+          type: string
+        role:
+          type: string
+        mode:
+          type: string
+        credential_owner:
+          type: string
+        status:
+          type: string
+        health_status:
+          type: string
+        live_authority_stage:
+          type: string
+        last_checked_at:
+          type: string
+          format: date-time
+      required: [connector_id, provider, role, mode, credential_owner, status, health_status, live_authority_stage, last_checked_at]
+      additionalProperties: false
+    TradingConnectorsHealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        connectors:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrokerConnectorHealth"
+        live_authority_state:
+          type: object
+          properties:
+            stage:
+              type: string
+            enabled:
+              type: boolean
+            basis:
+              type: string
+          required: [stage, enabled, basis]
+          additionalProperties: false
+      required: [ok, connectors, live_authority_state]
       additionalProperties: false
     RepoFileRequest:
       type: object
@@ -1258,6 +1619,261 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Orchestration read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/trading/candidates:
+    get:
+      operationId: tradingCandidates
+      summary: List governed trading candidates
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: asset
+          schema:
+            type: string
+        - in: query
+          name: execution_mode
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Candidate list returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingCandidatesResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing trading storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Trading read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/trading/candidates/{candidate_id}:
+    get:
+      operationId: tradingCandidate
+      summary: Read one governed trading candidate
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: path
+          name: candidate_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Candidate returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingCandidateResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Candidate not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing trading storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Trading read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/trading/candidates/{candidate_id}/decision:
+    post:
+      operationId: tradingCandidateDecision
+      summary: Record an approve or reject decision for one candidate
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: path
+          name: candidate_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingDecisionRequest"
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingDecisionResponse"
+        "400":
+          description: Invalid decision request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Candidate not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing trading storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Trading write failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/trading/journal:
+    get:
+      operationId: tradingJournal
+      summary: Read compact trade-journal records
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: query
+          name: asset
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Journal entries returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingJournalResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing trading storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Trading read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/trading/backtests/{run_id}:
+    get:
+      operationId: tradingBacktest
+      summary: Read one recorded evaluation run
+      security:
+        - FounderosApiKey: []
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Evaluation run returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingBacktestResponse"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Backtest run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Missing trading storage configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Trading read failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/founderos/trading/connectors/health:
+    get:
+      operationId: tradingConnectorsHealth
+      summary: Read governed broker connector readiness
+      security:
+        - FounderosApiKey: []
+      responses:
+        "200":
+          description: Connector readiness returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingConnectorsHealthResponse"
+        "401":
+          description: Missing or invalid API key
           content:
             application/json:
               schema:

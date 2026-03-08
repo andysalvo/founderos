@@ -18,7 +18,7 @@ if [[ -z "${WRITE_KEY}" ]]; then
 fi
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <capabilities|plan|repo-file|repo-tree|freeze|execute|merge-pr|submit|job-status|claim|heartbeat|complete|fail> [args...]" >&2
+  echo "usage: $0 <capabilities|plan|repo-file|repo-tree|freeze|execute|merge-pr|submit|submit-json|job-status|claim|heartbeat|complete|fail|trading-candidates|trading-candidate|trading-decision|trading-journal|trading-backtest|trading-connectors-health> [args...]" >&2
   exit 1
 fi
 
@@ -157,6 +157,15 @@ case "${cmd}" in
       -d "{\"user_request\":${request_json},\"scope\":{\"repo\":${repo_json},\"branch\":${branch_json}},\"requested_by\":${requested_by_json},\"requested_by_lane\":\"worker_bootstrap\",\"requested_by_subject_type\":\"worker\"}" \
       "${BASE_URL}/api/founderos/orchestrate/submit"
     ;;
+  submit-json)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 submit-json /path/to/payload.json" >&2
+      exit 1
+    fi
+    curl -sS "${auth_header[@]}" \
+      --data @"$1" \
+      "${BASE_URL}/api/founderos/orchestrate/submit"
+    ;;
   job-status)
     if [[ $# -lt 1 ]]; then
       echo "usage: $0 job-status <job_id>" >&2
@@ -228,6 +237,50 @@ case "${cmd}" in
     "${worker_lifecycle_curl[@]}" "${worker_auth_header[@]}" \
       --data "${payload}" \
       "${BASE_URL}/api/founderos/orchestrate/jobs/${job_id}/fail"
+    ;;
+  trading-candidates)
+    query_string=""
+    if [[ -n "${1:-}" ]]; then
+      query_string="?status=$1"
+    fi
+    curl -sS "${auth_header[@]}" \
+      "${BASE_URL}/api/founderos/trading/candidates${query_string}"
+    ;;
+  trading-candidate)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 trading-candidate <candidate_id>" >&2
+      exit 1
+    fi
+    curl -sS "${auth_header[@]}" \
+      "${BASE_URL}/api/founderos/trading/candidates/$1"
+    ;;
+  trading-decision)
+    if [[ $# -lt 3 ]]; then
+      echo "usage: $0 trading-decision <candidate_id> <approve|reject> <authorized_by> [context]" >&2
+      exit 1
+    fi
+    action_json="$(json_string "$2")"
+    authorized_by_json="$(json_string "$3")"
+    context_json="$(json_string "${4:-}")"
+    curl -sS "${auth_header[@]}" \
+      -d "{\"decision\":${action_json},\"authorized_by\":${authorized_by_json},\"context\":${context_json}}" \
+      "${BASE_URL}/api/founderos/trading/candidates/$1/decision"
+    ;;
+  trading-journal)
+    curl -sS "${auth_header[@]}" \
+      "${BASE_URL}/api/founderos/trading/journal"
+    ;;
+  trading-backtest)
+    if [[ $# -lt 1 ]]; then
+      echo "usage: $0 trading-backtest <run_id>" >&2
+      exit 1
+    fi
+    curl -sS "${auth_header[@]}" \
+      "${BASE_URL}/api/founderos/trading/backtests/$1"
+    ;;
+  trading-connectors-health)
+    curl -sS "${auth_header[@]}" \
+      "${BASE_URL}/api/founderos/trading/connectors/health"
     ;;
   *)
     echo "unknown command: ${cmd}" >&2

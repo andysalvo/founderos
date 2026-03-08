@@ -59,7 +59,7 @@ The conversational layer interprets intent, explains the system, proposes next a
 
 APS is the authority boundary.
 
-It validates, scopes, records, and governs consequential operations. It preserves policy boundaries, lane separation, structured execution, and durable truth about governed actions.
+It validates, scopes, records, and governs consequential operations. It preserves policy boundaries, lane separation, structured execution, and durable truth about governed actions. When financial connectors are admitted, APS also owns broker and market-data connector authority, risk gates, kill switches, and live-authority state.
 
 ### 3. Execution layer
 

@@ -22,3 +22,9 @@ Each amendment should answer:
 
 Read amendments in numerical order.
 If an amendment conflicts with ordinary practice, the amendment governs.
+
+Current staged authority additions:
+
+- `AMENDMENT_005_FINANCIAL_CONNECTORS_AND_MONEY_PATH_CONTROL.md`
+- `AMENDMENT_006_STRATEGY_EVALUATION_AND_PROMOTION_GATES.md`
+- `AMENDMENT_007_AUTONOMOUS_LIVE_TRADING_AUTHORITY.md`

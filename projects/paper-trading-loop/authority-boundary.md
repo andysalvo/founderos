@@ -6,6 +6,7 @@ This project begins as a **paper-trading system only**.
 
 The goal is not to chase live profit before the system is legible.
 The goal is to build a disciplined operator loop that can later stage live trades safely.
+Autonomous live trading is not part of the current phase and requires additional governance before it can become valid.
 
 ## Allowed in phase 1
 
@@ -38,6 +39,8 @@ If this project later progresses to live trading, the live boundary should be:
 - the founder remains the decision-maker for live execution
 - every live order must have explicit authorization and a durable audit trail
 
+If a later amendment introduces autonomous live execution, that power must still remain APS-governed, staged, bounded, and revocable.
+
 ## Human-required actions
 
 Even in later phases, these actions should remain human-authorized:
@@ -47,7 +50,7 @@ Even in later phases, these actions should remain human-authorized:
 - widening the tradable asset list
 - adding or rotating exchange keys
 - switching exchanges
-- approving any live order
+- approving any live order until a later amendment creates a narrower autonomous live lane
 
 ## Project discipline
 

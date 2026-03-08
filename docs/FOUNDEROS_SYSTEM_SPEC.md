@@ -102,6 +102,12 @@ These routes exist in code and are covered by the contract test in [tests/founde
 - `POST /api/founderos/commit/merge-pr`
 - `POST /api/founderos/orchestrate/submit`
 - `GET /api/founderos/orchestrate/jobs/{job_id}`
+- `GET /api/founderos/trading/candidates`
+- `GET /api/founderos/trading/candidates/{candidate_id}`
+- `POST /api/founderos/trading/candidates/{candidate_id}/decision`
+- `GET /api/founderos/trading/journal`
+- `GET /api/founderos/trading/backtests/{run_id}`
+- `GET /api/founderos/trading/connectors/health`
 
 Primary implementation paths:
 
@@ -112,6 +118,13 @@ Primary implementation paths:
 - [api/founderos/commit/merge-pr.js](../api/founderos/commit/merge-pr.js)
 - [api/founderos/orchestrate/submit.js](../api/founderos/orchestrate/submit.js)
 - [api/founderos/orchestrate/jobs/[job_id].js](../api/founderos/orchestrate/jobs/[job_id].js)
+- [api/_lib/trading.js](../api/_lib/trading.js)
+- [api/founderos/trading/candidates.js](../api/founderos/trading/candidates.js)
+- [api/founderos/trading/candidates/[candidate_id].js](../api/founderos/trading/candidates/[candidate_id].js)
+- [api/founderos/trading/candidates/[candidate_id]/decision.js](../api/founderos/trading/candidates/[candidate_id]/decision.js)
+- [api/founderos/trading/journal.js](../api/founderos/trading/journal.js)
+- [api/founderos/trading/backtests/[run_id].js](../api/founderos/trading/backtests/[run_id].js)
+- [api/founderos/trading/connectors/health.js](../api/founderos/trading/connectors/health.js)
 - [docs/openapi.founderos.yaml](./openapi.founderos.yaml)
 
 ### Current safety invariants
@@ -127,6 +140,8 @@ The active v1 seed enforces these invariants today:
 - GitHub writes happen only after witness logging succeeds,
 - policy-bearing artifacts are classified explicitly and protected control-plane paths are blocked,
 - raw model text does not directly become shell, Git, SQL, or mutating external API input without deterministic validation,
+- APS-owned trading routes expose candidate review, journal reads, backtest reads, and connector readiness without delegating broker authority to the VM,
+- broker and market-data credentials remain APS-owned and server-side,
 - GitHub App credentials and Supabase credentials remain server-side.
 
 Protected paths currently blocked by server policy:
@@ -187,6 +202,36 @@ This current activation path is documented in:
 
 - [docs/OPENCLAW_APS_ACTIVATION.md](./OPENCLAW_APS_ACTIVATION.md)
 - [docs/DEPLOY_LOCAL_VM.md](./DEPLOY_LOCAL_VM.md)
+
+### Current APS-centered trading object expansion
+
+The current repo now also contains an APS-centered trading object model and storage scaffold rather than an ad hoc trading blob.
+
+Current object families added for the trading path:
+
+- `strategy_definitions`
+- `evaluation_runs`
+- `market_snapshots`
+- `signal_runs`
+- `trade_candidates`
+- `approval_decisions`
+- `risk_policies`
+- `broker_connectors`
+- `broker_orders`
+- `fill_events`
+- `position_states`
+- `kill_switch_events`
+- `live_authority_states`
+- `trade_journal`
+
+The canonical storage scaffold for these objects currently lives in:
+
+- [infra/supabase/trading.sql](../infra/supabase/trading.sql)
+
+The project-level research and type-model references currently live in:
+
+- [projects/paper-trading-loop/research/trading-agent-research-notes.md](../projects/paper-trading-loop/research/trading-agent-research-notes.md)
+- [projects/paper-trading-loop/trading-object-model.md](../projects/paper-trading-loop/trading-object-model.md)
 
 ## Target System Spec
 

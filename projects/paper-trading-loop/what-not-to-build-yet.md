@@ -5,7 +5,7 @@ This project needs discipline more than breadth.
 ## Do not build yet
 
 - a generic public trading bot
-- fully autonomous live trading
+- fully autonomous live trading without explicit governance and promotion gates
 - multi-exchange support
 - derivatives support
 - leveraged strategies
@@ -31,3 +31,5 @@ The project should stay focused on proving one thing:
 **Can Founderos become a trustworthy paper-first trading operator that does most of the work and keeps the founder in control of real-money authorization?**
 
 If the answer is not yet yes, do not widen scope.
+
+If Founderos later pursues autonomous live trading, it should do so as a staged, amendment-backed later phase rather than as an implicit v1 objective.

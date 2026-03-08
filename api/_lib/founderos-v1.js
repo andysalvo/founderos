@@ -87,6 +87,48 @@ const ENDPOINTS = [
     auth: "apiKey",
     purpose: "Read durable status, artifacts, and recent events for one orchestration job.",
   },
+  {
+    operationId: "tradingCandidates",
+    method: "GET",
+    path: "/api/founderos/trading/candidates",
+    auth: "apiKey",
+    purpose: "List governed trading candidates and their latest approval state.",
+  },
+  {
+    operationId: "tradingCandidate",
+    method: "GET",
+    path: "/api/founderos/trading/candidates/{candidate_id}",
+    auth: "apiKey",
+    purpose: "Read one trading candidate with decisions and broker-order records.",
+  },
+  {
+    operationId: "tradingCandidateDecision",
+    method: "POST",
+    path: "/api/founderos/trading/candidates/{candidate_id}/decision",
+    auth: "apiKey",
+    purpose: "Record one governed approve/reject decision against a trading candidate.",
+  },
+  {
+    operationId: "tradingJournal",
+    method: "GET",
+    path: "/api/founderos/trading/journal",
+    auth: "apiKey",
+    purpose: "Read compact trade-journal records for review and promotion checks.",
+  },
+  {
+    operationId: "tradingBacktest",
+    method: "GET",
+    path: "/api/founderos/trading/backtests/{run_id}",
+    auth: "apiKey",
+    purpose: "Read one recorded evaluation/backtest run.",
+  },
+  {
+    operationId: "tradingConnectorsHealth",
+    method: "GET",
+    path: "/api/founderos/trading/connectors/health",
+    auth: "apiKey",
+    purpose: "Report governed broker and market-data connector readiness from APS-owned config.",
+  },
 ];
 
 const POLICY_BEARING_PATH_RULES = [
@@ -556,6 +598,14 @@ function normalizeScope(raw) {
     branch: typeof scope.branch === "string" ? scope.branch.trim() : "",
     allowed_paths: normalizeStringList(scope.allowed_paths),
     forbidden_paths: normalizeStringList(scope.forbidden_paths),
+    project_slug: validateIdentifier(scope.project_slug, { maxLength: 80 }),
+    task_kind: validateIdentifier(scope.task_kind, { maxLength: 80 }),
+    anchor_paths: normalizeStringList(scope.anchor_paths),
+    provider: validateIdentifier(scope.provider, { maxLength: 80 }),
+    execution_mode: validateIdentifier(scope.execution_mode, { maxLength: 20 }),
+    strategy_name: validateIdentifier(scope.strategy_name, { maxLength: 120 }),
+    asset: validateIdentifier(scope.asset, { maxLength: 40, allowSlash: true }),
+    timeframe: validateIdentifier(scope.timeframe, { maxLength: 40 }),
   };
 }
 
@@ -581,6 +631,20 @@ function inferIntendedTools(userRequest) {
     tools.push({
       name: "contract-validation",
       purpose: "Plan validation steps that still require explicit execution approval later.",
+    });
+  }
+
+  if (
+    text.includes("trade") ||
+    text.includes("trading") ||
+    text.includes("alpaca") ||
+    text.includes("broker") ||
+    text.includes("backtest") ||
+    text.includes("strategy")
+  ) {
+    tools.push({
+      name: "trading-research",
+      purpose: "Shape trading object model, evaluation, and execution policy without granting direct market authority.",
     });
   }
 

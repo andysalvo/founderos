@@ -14,6 +14,8 @@ No live capital.
 No live order routing.
 No exchange keys with withdrawal or live trading permissions.
 
+The long-term destination may widen later, but only through explicit governance and staged promotion gates.
+
 ## Why this exists
 
 Founderos already has:
@@ -65,6 +67,8 @@ Prove a disciplined paper-trading loop works end to end:
 - `first-strategy.md`
 - `monetization-path.md`
 - `what-not-to-build-yet.md`
+- `trading-object-model.md`
+- `research/trading-agent-research-notes.md`
 
 ## Success condition for phase 1
 

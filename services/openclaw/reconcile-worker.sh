@@ -6,7 +6,7 @@ RUN_FETCH=0
 RUN_RESTART=0
 SMOKE_REPO="${FOUNDEROS_SMOKE_REPO:-}"
 SMOKE_BRANCH="${FOUNDEROS_SMOKE_BRANCH:-main}"
-SMOKE_OBJECTIVE="${FOUNDEROS_SMOKE_OBJECTIVE:-Inspect the repo and return the current bounded worker proposal contract.}"
+SMOKE_OBJECTIVE="${FOUNDEROS_SMOKE_OBJECTIVE:-Inspect the repo and return the current APS-centered trading research contract for paper-trading-loop.}"
 WORKER_SERVICE="${FOUNDEROS_WORKER_SERVICE:-founderos-openclaw-worker.service}"
 
 while [[ $# -gt 0 ]]; do

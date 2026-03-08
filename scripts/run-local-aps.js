@@ -18,6 +18,12 @@ const orchestrateJobStatusHandler = require("../api/founderos/orchestrate/jobs/[
 const orchestrateJobHeartbeatHandler = require("../api/founderos/orchestrate/jobs/[job_id]/heartbeat");
 const orchestrateJobCompleteHandler = require("../api/founderos/orchestrate/jobs/[job_id]/complete");
 const orchestrateJobFailHandler = require("../api/founderos/orchestrate/jobs/[job_id]/fail");
+const tradingCandidatesHandler = require("../api/founderos/trading/candidates");
+const tradingCandidateHandler = require("../api/founderos/trading/candidates/[candidate_id]");
+const tradingCandidateDecisionHandler = require("../api/founderos/trading/candidates/[candidate_id]/decision");
+const tradingJournalHandler = require("../api/founderos/trading/journal");
+const tradingBacktestHandler = require("../api/founderos/trading/backtests/[run_id]");
+const tradingConnectorsHealthHandler = require("../api/founderos/trading/connectors/health");
 
 const PORT = Number(process.env.PORT || process.env.FOUNDEROS_PORT || 8787);
 const HOST = process.env.HOST || process.env.FOUNDEROS_HOST || "127.0.0.1";
@@ -35,6 +41,9 @@ const routes = new Map([
   ["POST /api/founderos/commit/auto-execute", commitAutoExecuteHandler],
   ["POST /api/founderos/orchestrate/submit", orchestrateSubmitHandler],
   ["POST /api/founderos/orchestrate/claim", orchestrateClaimHandler],
+  ["GET /api/founderos/trading/candidates", tradingCandidatesHandler],
+  ["GET /api/founderos/trading/journal", tradingJournalHandler],
+  ["GET /api/founderos/trading/connectors/health", tradingConnectorsHealthHandler],
 ]);
 
 const dynamicRoutes = [
@@ -58,6 +67,24 @@ const dynamicRoutes = [
     pattern: /^\/api\/founderos\/orchestrate\/jobs\/([^/]+)\/fail$/,
     handler: orchestrateJobFailHandler,
   },
+  {
+    method: "GET",
+    pattern: /^\/api\/founderos\/trading\/candidates\/([^/]+)$/,
+    handler: tradingCandidateHandler,
+    queryKey: "candidate_id",
+  },
+  {
+    method: "POST",
+    pattern: /^\/api\/founderos\/trading\/candidates\/([^/]+)\/decision$/,
+    handler: tradingCandidateDecisionHandler,
+    queryKey: "candidate_id",
+  },
+  {
+    method: "GET",
+    pattern: /^\/api\/founderos\/trading\/backtests\/([^/]+)$/,
+    handler: tradingBacktestHandler,
+    queryKey: "run_id",
+  },
 ];
 
 function readBody(req) {
@@ -80,7 +107,8 @@ const server = http.createServer(async (req, res) => {
         const match = req.method === dynamicRoute.method ? url.pathname.match(dynamicRoute.pattern) : null;
         if (match) {
           handler = dynamicRoute.handler;
-          req.query = { ...(req.query || {}), job_id: match[1] };
+          const queryKey = dynamicRoute.queryKey || "job_id";
+          req.query = { ...(req.query || {}), [queryKey]: match[1] };
           break;
         }
       }
