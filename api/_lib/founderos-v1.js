@@ -821,6 +821,7 @@ module.exports = {
   parseRepoSlug,
   readOptionalHeader,
   normalizeStringList,
+  normalizeScope,
   parseJsonBody,
   requireApiKey,
   requireWorkerKey,

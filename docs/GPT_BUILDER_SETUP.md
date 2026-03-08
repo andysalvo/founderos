@@ -44,6 +44,7 @@ Use this for most reasoning and discussion:
 Use this when the request is broader or implementation-heavy:
 
 1. Call `orchestrateSubmit`.
+2. If the active project is `paper-trading-loop`, send a structured `scope` object with `project_slug`, `task_kind`, `anchor_paths`, `provider`, `execution_mode`, `strategy_name`, `asset`, and `timeframe` instead of leaving those fields blank.
 2. Tell the user that Founderos queued an async job.
 3. Poll `orchestrateJobStatus`.
 4. Summarize the returned result, proposal, or PR outcome for the user.

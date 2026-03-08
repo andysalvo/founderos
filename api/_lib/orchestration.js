@@ -4,6 +4,7 @@ const {
   hashJson,
   isPlainObject,
   normalizeStringList,
+  normalizeScope,
   validateModelIdentity,
   validateMutationText,
 } = require("./founderos-v1");
@@ -28,6 +29,29 @@ const ACTIVE_JOB_STATUSES = new Set([
   "failed",
   "blocked",
 ]);
+
+const DEFAULT_TRADING_ANCHOR_PATHS = [
+  "projects/paper-trading-loop/README.md",
+  "projects/paper-trading-loop/alpaca-paper-mvp.md",
+  "projects/paper-trading-loop/paper-first-architecture.md",
+  "projects/paper-trading-loop/risk-rules.md",
+  "projects/paper-trading-loop/journal-schema.md",
+  "projects/paper-trading-loop/first-strategy.md",
+  "projects/paper-trading-loop/authority-boundary.md",
+  "projects/paper-trading-loop/research/trading-agent-research-notes.md",
+  "projects/paper-trading-loop/trading-object-model.md",
+  "docs/governance/CONSTITUTION.md",
+];
+
+const DEFAULT_TRADING_ALLOWED_PATHS = [
+  "projects/paper-trading-loop/**",
+  "services/openclaw/**",
+  "api/founderos/**",
+  "api/_lib/**",
+  "infra/supabase/**",
+  "tests/**",
+  "docs/**",
+];
 
 function requireSupabaseConfig() {
   return getSupabaseConfig();
@@ -82,10 +106,134 @@ function buildOrchestrationWitness(type, actor, artifactId, payload) {
   return row;
 }
 
+function looksLikeTradingRequest(userRequest, scope) {
+  const text = typeof userRequest === "string" ? userRequest.toLowerCase() : "";
+  const scoped = isPlainObject(scope) ? scope : {};
+  return (
+    scoped.project_slug === "paper-trading-loop" ||
+    (typeof scoped.task_kind === "string" && scoped.task_kind.startsWith("trading_")) ||
+    typeof scoped.provider === "string" && scoped.provider.trim().toLowerCase() === "alpaca" ||
+    [
+      "alpaca",
+      "paper trading",
+      "paper-trading",
+      "crypto",
+      "btc",
+      "eth",
+      "sol",
+      "trading",
+      "backtest",
+      "strategy",
+      "broker",
+    ].some((needle) => text.includes(needle))
+  );
+}
+
+function inferTradingTaskKind(userRequest, scope) {
+  const existing = typeof scope.task_kind === "string" ? scope.task_kind.trim() : "";
+  if (existing.startsWith("trading_")) {
+    return existing;
+  }
+
+  const text = typeof userRequest === "string" ? userRequest.toLowerCase() : "";
+  if (text.includes("live stage") || text.includes("canary")) {
+    return "trading_live_stage";
+  }
+  if (text.includes("live execute") || text.includes("autonomous live")) {
+    return "trading_live_execute";
+  }
+  if (
+    text.includes("sync") ||
+    text.includes("reconcile") ||
+    text.includes("recovery") ||
+    text.includes("restart") ||
+    text.includes("health")
+  ) {
+    return "trading_sync";
+  }
+  if (
+    text.includes("paper execute") ||
+    text.includes("paper order") ||
+    text.includes("approval") ||
+    text.includes("approve") ||
+    text.includes("decision")
+  ) {
+    return "trading_paper_execute";
+  }
+  if (
+    text.includes("shadow") ||
+    text.includes("candidate") ||
+    text.includes("signal") ||
+    text.includes("scan")
+  ) {
+    return "trading_shadow_scan";
+  }
+  if (
+    text.includes("backtest") ||
+    text.includes("evaluation") ||
+    text.includes("pbo") ||
+    text.includes("dsr")
+  ) {
+    return "trading_backtest";
+  }
+  return "trading_research";
+}
+
+function inferTradingAsset(userRequest, scope) {
+  if (scope.asset) {
+    return scope.asset;
+  }
+
+  const text = typeof userRequest === "string" ? userRequest.toLowerCase() : "";
+  if (text.includes("eth")) {
+    return "ETH/USD";
+  }
+  if (text.includes("sol")) {
+    return "SOL/USD";
+  }
+  return "BTC/USD";
+}
+
+function inferTradingTimeframe(userRequest, scope) {
+  if (scope.timeframe) {
+    return scope.timeframe;
+  }
+
+  const text = typeof userRequest === "string" ? userRequest.toLowerCase() : "";
+  if (text.includes("1h") || text.includes("60m")) {
+    return "1h";
+  }
+  if (text.includes("5m")) {
+    return "5m";
+  }
+  return "15m";
+}
+
+function normalizeSubmitScope(userRequest, rawScope) {
+  const scope = normalizeScope(rawScope);
+  if (!looksLikeTradingRequest(userRequest, rawScope)) {
+    return scope;
+  }
+
+  return {
+    ...scope,
+    project_slug: scope.project_slug || "paper-trading-loop",
+    task_kind: inferTradingTaskKind(userRequest, scope),
+    anchor_paths: scope.anchor_paths.length ? scope.anchor_paths : DEFAULT_TRADING_ANCHOR_PATHS,
+    provider: scope.provider || "alpaca",
+    execution_mode: scope.execution_mode || "paper",
+    strategy_name: scope.strategy_name || "btc_usd_breakout_v1",
+    asset: inferTradingAsset(userRequest, scope),
+    timeframe: inferTradingTimeframe(userRequest, scope),
+    allowed_paths: scope.allowed_paths.length ? scope.allowed_paths : DEFAULT_TRADING_ALLOWED_PATHS,
+  };
+}
+
 function normalizeSubmitBody(body) {
   const payload = isPlainObject(body) ? body : {};
   const userRequest =
     typeof payload.user_request === "string" ? payload.user_request.trim() : "";
+  const scope = normalizeSubmitScope(userRequest, payload.scope);
   const requestedBy = validateMutationText(payload.requested_by, {
     required: false,
     multiline: false,
@@ -104,12 +252,9 @@ function normalizeSubmitBody(body) {
 
   return {
     user_request: userRequest,
-    scope: payload.scope,
+    scope,
     constraints: normalizeStringList(payload.constraints),
-    repo:
-      isPlainObject(payload.scope) && typeof payload.scope.repo === "string"
-        ? payload.scope.repo.trim()
-        : "",
+    repo: scope.repo,
     requested_by: requestedBy || "chatgpt",
     requested_by_lane: requestedByLane || "public",
     requested_by_subject_type: requestedBySubjectType || "human_directed",

@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { buildPlanArtifact } = require("../api/_lib/founderos-v1.js");
+const { normalizeSubmitBody } = require("../api/_lib/orchestration.js");
 
 const healthHandler = require("../api/founderos/health.js");
 const capabilitiesHandler = require("../api/founderos/capabilities.js");
@@ -289,6 +290,35 @@ test("buildPlanArtifact preserves trading scope and intended tools", () => {
   assert.equal(artifact.scope.asset, "BTC/USD");
   assert.equal(artifact.scope.timeframe, "15m");
   assert.ok(artifact.intended_tools.some((item) => item.name === "trading-research"));
+});
+
+test("normalizeSubmitBody backfills trading scope when GPT sends a thin paper-trading request", () => {
+  const normalized = normalizeSubmitBody({
+    user_request:
+      "Inspect the repo and build the Alpaca paper crypto trading loop for paper-trading-loop.",
+    scope: {
+      repo: "andysalvo/founderos",
+      branch: "main",
+      project_slug: "",
+      task_kind: "",
+      anchor_paths: [],
+      provider: "",
+      execution_mode: "",
+      strategy_name: "",
+      asset: "",
+      timeframe: "",
+    },
+  });
+
+  assert.equal(normalized.scope.project_slug, "paper-trading-loop");
+  assert.equal(normalized.scope.task_kind, "trading_research");
+  assert.equal(normalized.scope.provider, "alpaca");
+  assert.equal(normalized.scope.execution_mode, "paper");
+  assert.equal(normalized.scope.strategy_name, "btc_usd_breakout_v1");
+  assert.equal(normalized.scope.asset, "BTC/USD");
+  assert.equal(normalized.scope.timeframe, "15m");
+  assert.ok(normalized.scope.anchor_paths.length > 0);
+  assert.ok(normalized.scope.allowed_paths.length > 0);
 });
 
 test("worker check script verifies trading-specific smoke inputs and outputs", async () => {
